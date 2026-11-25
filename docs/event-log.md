@@ -47,7 +47,7 @@ tool's calls in one session (failed, then failed, then ok) is a lifecycle of
 its own. A tool's global lifecycle would interleave sessions in an order the
 spans do not keep, which is why `tool` gets none.
 
-Event attributes: status, error kind and type, PLexus's refusal, entry
+Event attributes: status, error kind and type, the JSON-RPC error code, PLexus's refusal, entry
 (through PLexus, to the image, dispatched), duration, answer size and whether
 it was cut, result count and whether there were more, test outcome and count,
 the call's place in its session, the host's time for it and the agent's

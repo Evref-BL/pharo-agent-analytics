@@ -19,10 +19,12 @@ with the number that would show it being gamed.
   span it forwarded with, the image's span, joined within their trace,
   session and week. A call an image's `tool_call` dispatched is a call of its
   own, marked dispatched, and left out of the agent's sequence.
-- **A failed call** is a span with status error, or one naming an error
-  type, an MCP error kind or a PLexus refusal. OpenTelemetry's MCP
-  conventions do not mark a refused argument (-32602) as an error on the
-  server's span; it is a failed call here.
+- **A failed call** is one the agent did not get what it asked for: a span
+  with status error, or one naming an error type, a JSON-RPC error code
+  (`rpc.status_code`), an MCP error kind or a PLexus refusal. OpenTelemetry's
+  MCP conventions judge a span from its own side: a server's span is not an
+  error when the request was the caller's fault (-32602 among others), the
+  client's span of the same call is. The analyses take the client's side.
 - **A session** ends after 30 minutes without a call. Subagents share their
   agent's session, so their calls interleave in it.
 - **Order** comes from each call's start time. When a filter kept only the

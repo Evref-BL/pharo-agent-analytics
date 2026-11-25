@@ -15,7 +15,7 @@ SELECT
     tool                                                       AS type,
     CASE WHEN time_precise THEN start_time
          ELSE week + to_milliseconds(coalesce(order_ms - min(order_ms) OVER (PARTITION BY session_id), seq)) END AS time,
-    status, error_kind, error_type, plexus_error_code, entry, dispatched,
+    status, error_kind, error_type, rpc_status_code, plexus_error_code, entry, dispatched,
     duration_ms, output_bytes, budget_exceeded, result_count, result_more,
     test_outcome, test_count, seq,
     -- The agent host's time for the call, when it traces its tool calls, and the

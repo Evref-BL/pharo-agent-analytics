@@ -83,7 +83,8 @@ CREATE TABLE IF NOT EXISTS spans (
     agent_name            VARCHAR,
     input_tokens          BIGINT,
     output_tokens         BIGINT,
-    conversation_id       VARCHAR
+    conversation_id       VARCHAR,
+    rpc_status_code       VARCHAR        -- the JSON-RPC error code a call was answered with, error or not
 );
 
 ALTER TABLE spans ADD COLUMN IF NOT EXISTS resource JSON;
@@ -96,3 +97,4 @@ ALTER TABLE spans ADD COLUMN IF NOT EXISTS agent_name VARCHAR;
 ALTER TABLE spans ADD COLUMN IF NOT EXISTS input_tokens BIGINT;
 ALTER TABLE spans ADD COLUMN IF NOT EXISTS output_tokens BIGINT;
 ALTER TABLE spans ADD COLUMN IF NOT EXISTS conversation_id VARCHAR;
+ALTER TABLE spans ADD COLUMN IF NOT EXISTS rpc_status_code VARCHAR;

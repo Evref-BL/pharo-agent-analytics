@@ -89,5 +89,6 @@ SELECT
     attr(doc, 'gen_ai.agent.name'),
     TRY_CAST(attr(doc, 'gen_ai.usage.input_tokens') AS BIGINT),
     TRY_CAST(attr(doc, 'gen_ai.usage.output_tokens') AS BIGINT),
-    attr(doc, 'gen_ai.conversation.id')
+    attr(doc, 'gen_ai.conversation.id'),
+    attr(doc, 'rpc.status_code')
 FROM (SELECT json AS doc FROM read_ndjson_objects($path));
