@@ -589,6 +589,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "duckdb" },
+    { name = "numpy" },
 ]
 
 [package.dev-dependencies]
@@ -600,7 +601,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "duckdb", specifier = ">=2.0.1" }]
+requires-dist = [
+    { name = "duckdb", specifier = ">=2.0.1" },
+    { name = "numpy", specifier = ">=2.5" },
+]
 
 [package.metadata.requires-dev]
 check = [{ name = "pm4py", specifier = ">=2.7.23.15" }]

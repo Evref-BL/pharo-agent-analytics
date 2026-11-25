@@ -55,13 +55,47 @@ with the number that would show it being gamed.
 | `a_tests` | How a test run ends after the previous one | heatmap | how many tests run |
 | `a_compile_to_green` | From a compile to passing tests | cumulative incidence | sessions that never test |
 | `a_latency`, `a_output` | Time and size per tool, answers cut to fit | heatmap; ranges | |
+| `markov-order` | How far back the next call looks: chains of 0 to 3 calls | held-out bits per order, with each criterion's pick | AIC and BIC charge for every probability; held-out sessions were not fitted |
+| `markov-memory` | Pairs of calls after which the next call differs from what the last alone predicts | table | sessions per pair, as for sequences |
+| `markov-recovery` | After a failure, what the first-order chain over (tool, outcome) expects: the chance the tool works before the session ends, and the calls it takes | dots beside the observed share | the observed share and its interval: far apart, the last call is not all that matters |
+| `phases` | Phases a session goes through, unnamed in the spans: a hidden Markov model of 1 to 6 phases | where each phase comes in a session; what phase comes next; each phase's tools | BIC and held-out sessions say how many phases the calls support |
 | `a_releases` | A tool's failure release against release, as it came and with every release given the same mix of agent hosts | forest plot | the share of the mix each release saw |
 | `a_images` | What PLexus did to images: create, start, stop, delete | table | |
+
+## Markov models
+
+The directly-follows graph (`a_dfg`) is a first-order Markov chain's counts;
+its `share` is the transition probability P(next | tool), which the process
+map draws on request. The models in `markov.py` take the same sequences, one
+per session and facet:
+
+- **Order**: for k = 0 to 3, a chain of the last k calls, with one
+  probability per next call (each tool, or the end) for every context of k
+  calls seen. Each order is judged by the likelihood ratio against the order
+  below (chi-square), AIC, BIC, and the bits it needs per call of sessions
+  held out of the fit (five folds of whole sessions, add-one smoothing).
+- **Memory**: for each pair (before, last), the information knowing `before`
+  adds about the next call, n · KL(P(next | before, last) ‖ P(next | last)).
+- **Absorbing chain**: the first-order chain over (tool, worked or failed),
+  with the tool working and the session ending absorbing. With N = (I − Q)⁻¹,
+  N·R gives the chances of each, N·1 the calls until one happens, and
+  (N·b)/b the calls until the tool works, given that it does.
+- **Phases**: a hidden Markov model over the tools called, fitted by
+  Baum–Welch from three random starts, for 1 to 6 phases (`--max-phases`),
+  compared by BIC and, up to 50,000 calls, by held-out sessions (three folds).
+  Phases are numbered by their mean place in the session; each is described
+  by its posterior weight on the calls.
+
+Every model runs on whatever calls there are. When the penalised criteria
+choose less memory or fewer phases than the others, the calls are too few to
+estimate more, and the report says so beside the model rather than leaving it
+out.
 
 ## Thresholds
 
 `--min-sessions` (1 by default: everything) applies to every facet and to
-every row that tells a sequence or a word (variants, pairs, schema places,
+every row that tells a sequence or a word (variants, pairs, pairs that change
+what follows, schema places,
 argument names, options, a tool's life, runs, error messages). Variants below
 it are counted together. Rows that count calls of a tool are kept whatever
 the threshold. Set it for a report read beyond the people whose spans it

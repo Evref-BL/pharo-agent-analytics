@@ -5,10 +5,11 @@ import * as Plot from "@observablehq/plot";
 import * as d3 from "d3";
 import { sankey, sankeyLinkHorizontal, type SankeyLink, type SankeyNode } from "d3-sankey";
 import { all, meta, of, type Facet, type Row } from "./data";
+import { chainRecovery } from "./markov";
 import { processMap } from "./process";
 import {
   ERROR_KINDS, ERROR_LABELS, card, count, el, empty, errorColor, errorKind, legend, percent,
-  section, segmented, sequential, series, sumBy, table, tableView, token,
+  fit, section, segmented, sequential, series, sumBy, table, tableView, token, wilson,
 } from "./ui";
 
 const WIDTH = 520;
@@ -27,7 +28,7 @@ function plotStyle(): Partial<Plot.PlotOptions> {
 }
 
 function chart(options: Plot.PlotOptions): Element {
-  return Plot.plot({ ...plotStyle(), ...options });
+  return fit(Plot.plot({ ...plotStyle(), ...options }));
 }
 
 // ---------------------------------------------------------------- overview
@@ -91,14 +92,6 @@ export function overview(facet: Facet): HTMLElement {
 
 function tile(value: string, label: string, sub: string): HTMLElement {
   return el("div", { class: "tile" }, el("div", { class: "value" }, value), el("div", { class: "label" }, label), el("div", { class: "sub" }, sub));
-}
-
-function wilson(k: number, n: number): { low: number; high: number } {
-  if (!n) return { low: 0, high: 1 };
-  const p = k / n, z = 1.96, z2 = z * z;
-  const center = (p + z2 / (2 * n)) / (1 + z2 / n);
-  const half = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / (1 + z2 / n);
-  return { low: Math.max(0, center - half), high: Math.min(1, center + half) };
 }
 
 // ---------------------------------------------------------------- tools
@@ -343,7 +336,7 @@ export function failures(facet: Facet): HTMLElement {
     legend([["then the tool worked", token("--series-1")], ["then another tool", token("--series-2")], ["then the session ended", token("--series-3")]]),
     tableView(runs, [{ key: "tool", label: "Tool" }, { key: "length", label: "In a row", numeric: true }, { key: "ending", label: "Then" }, { key: "runs", label: "Runs", numeric: true }, { key: "sessions", label: "Sessions", numeric: true }]),
   );
-  body.append(flow.root, incidence.root, repeats.root);
+  body.append(flow.root, incidence.root, chainRecovery(facet), repeats.root);
   return root;
 }
 
@@ -667,6 +660,12 @@ export function method(): HTMLElement {
         el("li", {}, "Calls of one session are not independent: a rate is given per session as well as per call, and its 95 % interval (Wilson) is the session's."),
         el("li", {}, "Recovery and compile-to-tests curves are cumulative incidence (Aalen–Johansen), with the session's end as a competing outcome."),
         el("li", {}, "Release comparisons are also given with every release weighted to the same mix of agent hosts (direct standardisation): hosts fail differently, and their mix moves between releases.")),
+      el("h3", {}, "Markov models"),
+      el("ul", {},
+        el("li", {}, "The process map is a first-order Markov chain's counts, and its arrows by probability are the chain's transition probabilities. The order test says whether the next call depends on more than the last one."),
+        el("li", {}, "Orders and numbers of phases are judged by the likelihood ratio, AIC and BIC, which charge for every probability a model estimates, and by the likelihood of whole sessions held out of the fit; phases are held out while the calls are 50,000 or fewer, BIC deciding alone beyond."),
+        el("li", {}, "Every model runs on whatever calls there are, and says what they support: a penalised criterion choosing less memory or fewer phases than the others means the calls are still too few for more."),
+        el("li", {}, "Subagents share their agent's session, so their calls interleave: transitions nobody made in sequence, which make the chain look less predictable than each agent is.")),
       el("h3", {}, "What is left out"),
       el("ul", {},
         el("li", {}, m.minSessions > 1

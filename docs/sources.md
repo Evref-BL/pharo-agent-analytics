@@ -73,13 +73,25 @@ What the project builds on, read 2026-11-25. Versions are those of that day.
 - Direct standardisation of rates. https://documentation.sas.com/doc/en/statcdc/14.2/statug/statug_stdrate_details14.htm
 - Simpson's paradox. https://plato.stanford.edu/entries/paradox-simpson/
 - Markov models of navigation: one step back is usually enough (Singer et
-  al., 2014). https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4094564/
+  al., 2014); order chosen by likelihood ratio, AIC, BIC, Bayesian evidence
+  and cross-validation, as `markov-order` does. https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4094564/
+
+- Hidden Markov models and Baum–Welch, with scaling (Rabiner, 1989).
+  https://doi.org/10.1109/5.18626
+- Choosing the number of hidden states by cross-validated likelihood
+  rather than BIC alone (Celeux and Durand, 2008).
+  https://doi.org/10.1007/s00180-007-0097-1
+- Absorbing Markov chains: the fundamental matrix, absorption probabilities
+  and times (Grinstead and Snell, Introduction to Probability, chapter 11).
+  https://math.dartmouth.edu/~prob/prob/prob.pdf
 
 ## Tools
 
 | | Version | Use here |
 | --- | --- | --- |
 | DuckDB | 2.0.1 | the store and every analysis |
+| numpy | 2.5 | the Markov models: chains, the absorbing chain, Baum–Welch |
+| hmmlearn, pomegranate | limited maintenance; PyTorch | not used: Baum–Welch is a hundred lines over numpy |
 | pm4py | 2.7.23.15, AGPL-3.0 | a check that the event log reads, outside the package |
 | Rust4PM (`process_mining`, `r4pm`) | 0.7.1, MIT or Apache-2.0 | a permissive option for discovery at scale |
 | ocpa | 1.3.4, stale | not used |

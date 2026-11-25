@@ -97,8 +97,11 @@ UPDATE a_tools SET session_failure_low = wilson_low(sessions_failed::DOUBLE, ses
                    session_failure_high = wilson_high(sessions_failed::DOUBLE, sessions::DOUBLE);
 
 -- The directly-follows graph of sessions: which call follows which, with the
--- time between them. Start and end are nodes of their own.
+-- time between them. Start and end are nodes of their own. It is the
+-- first-order Markov chain's counts: `share` is P(target | source), the
+-- chain's transition probability.
 CREATE OR REPLACE TABLE a_dfg AS
+SELECT *, count / sum(count) OVER (PARTITION BY facet, facet_value, source) AS share FROM (
 SELECT facet, facet_value,
        coalesce(prev_tool, '▶') AS source, tool AS target,
        count(*) AS count, count(DISTINCT session_id) AS sessions,
@@ -109,7 +112,7 @@ FROM faceted GROUP BY ALL
 UNION ALL
 SELECT facet, facet_value, tool, '■', count(*), count(DISTINCT session_id),
        0, count(*) FILTER (WHERE failed), NULL
-FROM faceted WHERE next_tool IS NULL GROUP BY ALL;
+FROM faceted WHERE next_tool IS NULL GROUP BY ALL);
 
 -- The same, the tool as used in one session being the object: the calls that
 -- named it (discovery) and that called it, in order. Shows whether a found
@@ -128,9 +131,10 @@ WITH ordered AS (
     SELECT *, lag(activity) OVER (PARTITION BY facet, facet_value, session_id, object_tool ORDER BY step, activity DESC) AS prev
     FROM tool_use_events
 )
+SELECT *, count / sum(count) OVER (PARTITION BY facet, facet_value, tool, source) AS share FROM (
 SELECT facet, facet_value, object_tool AS tool, coalesce(prev, '▶') AS source, activity AS target,
        count(*) AS count, count(DISTINCT session_id) AS sessions
-FROM ordered GROUP BY ALL;
+FROM ordered GROUP BY ALL);
 
 -- Session variants: the sequence of tools, repeats folded (a run of the same
 -- tool is one step, marked ×), as a string.

@@ -3,7 +3,9 @@
 What agents do with the Pharo agent tools, read from the OpenTelemetry spans
 the tools send: MCP in each image, PLexus in front of them. It makes an
 object-centric event log (OCEL 2.0), the analyses that say where agents
-struggle and how they get out of it, and a visual report.
+struggle and how they get out of it, Markov models of the sessions (how far
+back the next call looks, hidden phases, what follows a failure), and a
+visual report.
 
 It reads whatever exported the spans, filtered or not: your own collector's
 files, a trace store, or an Elasticsearch index. It uses what the spans hold,
@@ -83,7 +85,7 @@ the report lists those nobody called.
 | Part | Language | |
 | --- | --- | --- |
 | `src/pharo_agent_analytics/sql/` | SQL (DuckDB) | spans to calls and sessions, the analyses, the event log |
-| `src/pharo_agent_analytics/` | Python | reading files and Elasticsearch, OCEL files, the report's data |
+| `src/pharo_agent_analytics/` | Python (numpy) | reading files and Elasticsearch, OCEL files, the Markov models, the report's data |
 | `site/` | TypeScript | the report: Observable Plot, Graphviz (WASM) for process maps, d3-sankey |
 
 - [docs/analyses.md](docs/analyses.md): what each analysis answers, and what keeps it honest.

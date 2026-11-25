@@ -207,3 +207,9 @@ details[open] > summary { margin-bottom: 8px; }
 .method { max-width: 75ch; display: flex; flex-direction: column; gap: 10px; color: var(--ink-2); }
 .method h3 { color: var(--ink); margin-top: 8px; }
 .method li { margin-bottom: 4px; }
+
+.verdict { font-size: 0.9rem; color: var(--ink); margin: 0; }
+.phases { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.phase-row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+.phase-chart { min-width: 0; max-width: 100%; overflow-x: auto; }
+.phase-chart h4 { margin: 0 0 6px; font-size: 0.85rem; font-weight: 600; color: var(--ink-2); }

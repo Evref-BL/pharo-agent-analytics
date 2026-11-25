@@ -162,3 +162,22 @@ def test_the_event_log_is_ocel_2(analysed, tmp_path):
 def test_a_value_the_filter_could_not_name_reads_as_other():
     assert report.plain("_OTHER") == "(other)"
     assert report.plain(["evaluate", "_OTHER"]) == ["evaluate", "(other)"]
+
+
+def test_the_report_carries_the_markov_models_of_every_facet(analysed, tmp_path):
+    report.write(analysed, tmp_path, max_phases=3)
+    read = lambda name: json.loads((tmp_path / f"{name}.json").read_text())
+    order = read("markov-order")
+    assert {"order", "aic", "bic", "heldout_bits", "chosen_by"} <= set(order["columns"])
+    assert {row[0] for row in order["rows"]} >= {"all"}
+    fits = read("phase-fits")
+    assert sorted({row[fits["columns"].index("phases")] for row in fits["rows"]}) == [1, 2, 3]
+    for name in ("markov-memory", "markov-recovery", "phases", "phase-transitions", "phase-places"):
+        assert read(name)["columns"][:2] == ["facet", "facet_value"]
+    dfg = read("dfg")
+    share, facet, value, source = (dfg["columns"].index(c) for c in ("share", "facet", "facet_value", "source"))
+    totals = {}
+    for row in dfg["rows"]:
+        key = (row[facet], row[value], row[source])
+        totals[key] = totals.get(key, 0) + row[share]
+    assert all(abs(t - 1) < 1e-4 for t in totals.values()), totals  # shares are written to six decimals

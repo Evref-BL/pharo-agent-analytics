@@ -46,7 +46,7 @@ function toolUseGraph(facet: Facet, tool: string, minEdge: number): Graph {
   return { nodes, edges };
 }
 
-function dot(graph: Graph, colorBy: "calls" | "failure"): string {
+function dot(graph: Graph, colorBy: "calls" | "failure", arrows: "count" | "share"): string {
   const ramp = sequential();
   const ink = token("--ink");
   const ink2 = token("--ink-2");
@@ -77,11 +77,13 @@ function dot(graph: Graph, colorBy: "calls" | "failure"): string {
     );
   }
   for (const e of graph.edges) {
-    const width = 0.6 + 5 * Math.sqrt(e.count / maxEdge);
-    const label = e.count >= maxEdge * 0.04 ? count(e.count) : "";
+    // By count, how much traffic an arrow carries; by share, the Markov
+    // chain's P(target | source), out of everything that followed the source.
+    const width = arrows === "count" ? 0.6 + 5 * Math.sqrt(e.count / maxEdge) : 0.6 + 5 * e.share;
+    const label = arrows === "count" ? (e.count >= maxEdge * 0.04 ? count(e.count) : "") : (e.share >= 0.05 ? percent(e.share) : "");
     const gap = e.median_gap_ms != null ? `, median ${Math.round(e.median_gap_ms / 1000)} s apart` : "";
     lines.push(
-      `${quote(e.source)} -> ${quote(e.target)} [penwidth=${width.toFixed(2)}, label=${quote(label)}, tooltip=${quote(`${e.source} → ${e.target}: ${count(e.count)} times in ${count(e.sessions)} sessions${gap}`)}];`,
+      `${quote(e.source)} -> ${quote(e.target)} [penwidth=${width.toFixed(2)}, label=${quote(label)}, tooltip=${quote(`${e.source} → ${e.target}: ${count(e.count)} times in ${count(e.sessions)} sessions, ${percent(e.share)} of what followed ${e.source}${gap}`)}];`,
     );
   }
   lines.push("}");
@@ -99,7 +101,7 @@ export function processMap(facet: Facet): HTMLElement {
   const tools = of("tools", facet).sort((a, b) => b.calls - a.calls);
   if (!tools.length) return empty();
   const keep = Math.min(14, tools.length);
-  const state = { object: "session", tool: tools[0].tool as string, keep, minEdge: readableMinEdge(facet, keep), colorBy: "calls" as "calls" | "failure" };
+  const state = { object: "session", tool: tools[0].tool as string, keep, minEdge: readableMinEdge(facet, keep), colorBy: "calls" as "calls" | "failure", arrows: "count" as "count" | "share" };
   const busiest = Math.max(1, ...of("dfg", facet).map((e) => e.count as number));
   const canvas = el("div", { class: "process", role: "img", "aria-label": "Process map of the calls" });
   const caption = el("p", { class: "note" });
@@ -126,18 +128,20 @@ export function processMap(facet: Facet): HTMLElement {
       caption.textContent =
         `Each box is a tool, each arrow a call that followed another in a session; ▶ starts and ■ ends a session. ` +
         `${state.keep} of ${built.total} tools, arrows taken at least ${state.minEdge} time${state.minEdge > 1 ? "s" : ""}. ` +
-        `Shade: ${state.colorBy === "calls" ? "how often the tool is called" : "the share of its calls that failed"}. Click a tool to follow its own use.`;
+        `Shade: ${state.colorBy === "calls" ? "how often the tool is called" : "the share of its calls that failed"}. ` +
+        `${state.arrows === "count" ? "Arrows: times taken" : "Arrows: the chance a call follows the tool, P(next | tool), out of all its next calls, those hidden here included"}. Click a tool to follow its own use.`;
     } else {
       graph = toolUseGraph(facet, state.tool, state.minEdge);
       caption.textContent =
         `The life of ${state.tool} within each session: the calls that named it (a search), then its own calls, ok or failed. ` +
-        `An arrow from failed to ok is a recovery; failed to failed, a repeat.`;
+        `An arrow from failed to ok is a recovery; failed to failed, a repeat. ` +
+        `${state.arrows === "count" ? "Arrows: times taken." : "Arrows: the chance of what comes next in the tool's life."}`;
     }
     if (!graph.edges.length) {
       canvas.replaceChildren(empty("No arrow is taken that often here."));
       return;
     }
-    const svg = (await viz).renderSVGElement(dot(graph, state.colorBy));
+    const svg = (await viz).renderSVGElement(dot(graph, state.colorBy, state.arrows));
     svg.removeAttribute("width");
     svg.removeAttribute("height");
     for (const node of svg.querySelectorAll<SVGGElement>("g.node")) {
@@ -166,12 +170,17 @@ export function processMap(facet: Facet): HTMLElement {
     state.colorBy,
     (value) => { state.colorBy = value as "calls" | "failure"; draw(); },
   );
+  const arrowSwitch = segmented(
+    [["count", "Arrows by count"], ["share", "Arrows by probability"]],
+    state.arrows,
+    (value) => { state.arrows = value as "count" | "share"; draw(); },
+  );
   toolSelect.addEventListener("change", () => { state.tool = toolSelect.value; draw(); });
   keepInput.addEventListener("input", () => { state.keep = Number(keepInput.value); draw(); });
   edgeInput.addEventListener("input", () => { state.minEdge = Number(edgeInput.value); draw(); });
 
   const controls = el("div", { class: "controls" }, el("label", {}, "Object", objectSwitch), toolControl, keepControl,
-    el("label", {}, "Arrows taken", edgeInput, edgeLabel), colorSwitch);
+    el("label", {}, "Arrows taken", edgeInput, edgeLabel), colorSwitch, arrowSwitch);
   draw();
   return el("div", { class: "card wide" }, el("h3", {}, "Process map"), controls, caption, canvas);
 }

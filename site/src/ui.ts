@@ -139,3 +139,24 @@ export function errorKind(kind: string | null | undefined): string {
 export function errorColor(kind: string): string {
   return series()[ERROR_KINDS.indexOf(errorKind(kind) as (typeof ERROR_KINDS)[number])];
 }
+
+/** The Wilson score interval of k in n, at 95 %. */
+export function wilson(k: number, n: number): { low: number; high: number } {
+  if (!n) return { low: 0, high: 1 };
+  const p = k / n, z = 1.96, z2 = z * z;
+  const center = (p + z2 / (2 * n)) / (1 + z2 / n);
+  const half = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / (1 + z2 / n);
+  return { low: Math.max(0, center - half), high: Math.min(1, center + half) };
+}
+
+/** A chart that shrinks to its card down to a readable width, and scrolls
+ * inside the card below it, never wider than the card. */
+export function fit<T extends Element>(node: T): T {
+  const svg = node instanceof SVGSVGElement ? node : node.querySelector("svg");
+  if (svg) {
+    svg.style.maxWidth = "100%";
+    svg.style.height = "auto";
+    svg.style.minWidth = "420px";
+  }
+  return node;
+}

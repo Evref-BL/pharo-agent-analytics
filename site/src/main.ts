@@ -2,12 +2,14 @@ import { all, load, meta, type Facet } from "./data";
 import {
   argumentsSection, discovery, failures, method, overview, process, releases, tests, timeAndSize, tools, variants,
 } from "./sections";
+import { markovSection } from "./markov";
 import { count, el } from "./ui";
 
 const FILES = [
   "meta", "facets", "weekly", "tools", "dfg", "tool-use-dfg", "variants", "recovery", "recovery-curves", "schema",
   "unknown-arguments", "options", "discovery", "evaluate", "collocations", "tests", "green-curves", "latency", "output",
   "sessions", "failure-runs", "more-results", "next-entropy", "releases", "images", "published", "errors",
+  "markov-order", "markov-memory", "markov-recovery", "phase-fits", "phases", "phase-transitions", "phase-places",
 ];
 
 const FACET_LABELS: Record<string, string> = {
@@ -39,7 +41,7 @@ async function main() {
   let facet: Facet = { facet: "all", value: "all" };
   const render = () => {
     report.replaceChildren(
-      overview(facet), tools(facet), process(facet), variants(facet), failures(facet),
+      overview(facet), tools(facet), process(facet), markovSection(facet), variants(facet), failures(facet),
       argumentsSection(facet), discovery(facet), tests(facet), timeAndSize(facet), releases(), method(),
     );
   };

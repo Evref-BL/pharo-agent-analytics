@@ -19,6 +19,7 @@ from typing import Any
 
 import duckdb
 
+from . import markov
 from .store import sql
 
 #: Tables whose rows tell a sequence or a word, and so need `min_sessions` sessions.
@@ -166,7 +167,54 @@ def published_tools(catalog: Path) -> dict[str, Any]:
     return {"columns": ["component", "tool"], "rows": out}
 
 
-def write(connection: duckdb.DuckDBPyConnection, out: Path, min_sessions: int = 1, catalog: Path | None = None) -> dict[str, Any]:
+def records(dicts: list[dict], facet: str, value: str, columns: list[str] | None = None) -> dict[str, Any]:
+    """Rows of dicts as a report file's columns and rows, under their facet."""
+    columns = columns or (list(dicts[0]) if dicts else [])
+    return {"columns": ["facet", "facet_value", *columns],
+            "rows": [[facet, plain(value), *(plain(d.get(c)) for c in columns)] for d in dicts]}
+
+
+def merge(files: list[dict[str, Any]]) -> dict[str, Any]:
+    columns = next((f["columns"] for f in files if f["rows"]), ["facet", "facet_value"])
+    return {"columns": columns, "rows": [row for f in files for row in f["rows"]]}
+
+
+def markov_files(connection: duckdb.DuckDBPyConnection, min_sessions: int, max_order: int = 3,
+                 max_phases: int = 6) -> dict[str, dict[str, Any]]:
+    """The Markov models of each kept facet: the chain's order, memory beyond
+    one call, what the chain expects after a failure, and hidden phases."""
+    observed = {
+        (f, v, t): (n, k, s, m) for f, v, t, n, k, s, m in connection.execute(
+            "SELECT facet, facet_value, tool, count(*), count(recovered_at), count(DISTINCT session_id), "
+            "quantile_cont(recovered_at - step, 0.5) FROM recoveries GROUP BY ALL").fetchall()
+    }
+    out: dict[str, list] = defaultdict(list)
+    # A facet holding the same calls as another (one release among all
+    # calls) gets the same models: fitted once.
+    fitted: dict[tuple, tuple] = {}
+    for (facet, value), seqs in sorted(markov.sequences(connection).items()):
+        key = tuple(tuple(seq) for seq in seqs)
+        if key not in fitted:
+            tools = [[t for t, _ in seq] for seq in seqs]
+            fitted[key] = (markov.order_test(tools, max_order), markov.memory(tools), markov.recovery(seqs),
+                           markov.phases(seqs, max_phases))
+        order, memory, chain, (fits, phases, transitions, places) = fitted[key]
+        out["markov-order"].append(records(order, facet, value))
+        out["markov-memory"].append(records([m for m in memory if m["sessions"] >= min_sessions][:40], facet, value))
+        recovery = []
+        for row in chain:
+            n, k, s, m = observed.get((facet, value, row["tool"]), (0, 0, 0, None))
+            recovery.append({**row, "failures": n, "recovered": k, "sessions": s, "median_calls": m})
+        out["markov-recovery"].append(records(recovery, facet, value))
+        out["phase-fits"].append(records(fits, facet, value))
+        out["phases"].append(records(phases, facet, value))
+        out["phase-transitions"].append(records(transitions, facet, value))
+        out["phase-places"].append(records(places, facet, value))
+    return {name: merge(parts) for name, parts in out.items()}
+
+
+def write(connection: duckdb.DuckDBPyConnection, out: Path, min_sessions: int = 1, catalog: Path | None = None,
+          max_order: int = 3, max_phases: int = 6) -> dict[str, Any]:
     out.mkdir(parents=True, exist_ok=True)
     kept_facets(connection, min_sessions)
     files = {}
@@ -177,6 +225,7 @@ def write(connection: duckdb.DuckDBPyConnection, out: Path, min_sessions: int = 
     files["releases"] = rows(connection, "SELECT * FROM a_releases WHERE sessions >= ? ORDER BY component, tool, release", [min_sessions])
     files["facets"] = rows(connection, "SELECT f.* FROM facets f JOIN kept USING (facet, facet_value) ORDER BY facet, calls DESC")
     files["images"] = rows(connection, "SELECT * FROM a_images WHERE sessions >= ? ORDER BY spans DESC", [min_sessions])
+    files.update(markov_files(connection, min_sessions, max_order, max_phases))
     if catalog:
         files["published"] = published_tools(catalog)
     totals = connection.execute(
