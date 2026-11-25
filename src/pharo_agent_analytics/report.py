@@ -69,7 +69,16 @@ def rows(connection: duckdb.DuckDBPyConnection, query: str, params: list | None 
     return {"columns": columns, "rows": [[plain(v) for v in row] for row in result.fetchall()]}
 
 
+#: What a filter keeps in place of a value its catalog does not name (a tool
+#: a later release added, an agent host not listed), and how the report says it.
+UNNAMED = ("_OTHER", "(other)")
+
+
 def plain(value: Any) -> Any:
+    if isinstance(value, str):
+        return value.replace(*UNNAMED)
+    if isinstance(value, list):
+        return [plain(v) for v in value]
     if isinstance(value, datetime):
         return value.date().isoformat()
     if isinstance(value, float):
@@ -136,7 +145,7 @@ def incidence_curves(connection: duckdb.DuckDBPyConnection, table_name: str, gro
         if kind != "all":
             groups[(facet, value, "all")].append((calls, reached, count))
     rows_out = [
-        [facet, value, kind, time, worked, ended, at_risk]
+        [facet, plain(value), kind, time, worked, ended, at_risk]
         for (facet, value, kind), observations in groups.items()
         for time, worked, ended, at_risk in cumulative_incidence(observations)
     ]

@@ -385,7 +385,7 @@ FROM faceted GROUP BY facet, facet_value, session_id, session_steps;
 
 -- What PLexus did for images, from its own spans.
 CREATE OR REPLACE TABLE a_images AS
-SELECT name AS operation, status, coalesce(error_type, '') AS error_type,
+SELECT name AS operation, CASE WHEN status = 'error' THEN 'error' ELSE 'ok' END AS status, coalesce(error_type, '') AS error_type,
        count(*) AS spans, count(DISTINCT session_id) AS sessions,
        quantile_cont(duration_ms, 0.5) AS p50_ms, quantile_cont(duration_ms, 0.9) AS p90_ms
 FROM spans WHERE name LIKE 'plexus.image.%'

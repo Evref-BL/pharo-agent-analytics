@@ -375,7 +375,9 @@ function alluvial(rows: Row[]): Element {
     .nodeSort(null)
     .extent([[1, 8], [width - 1, height - 8]]);
   const graph = layout({ nodes: nodes.map((d) => ({ ...d })), links: [...links.values()].map((d) => ({ ...d })) });
-  const svg = d3.create("svg").attr("viewBox", `0 0 ${width} ${height}`).attr("width", width).attr("height", height)
+  // Scaled to the card, so the outcome column is never cut off on a narrow one.
+  const svg = d3.create("svg").attr("viewBox", `0 0 ${width} ${height}`).attr("width", "100%")
+    .style("max-width", `${width}px`).style("height", "auto")
     .attr("role", "img").attr("aria-label", "Failed calls, what came next, and the outcome")
     .style("font", "11px system-ui, sans-serif");
   svg.append("g").attr("fill", "none").selectAll("path").data(graph.links).join("path")

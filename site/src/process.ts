@@ -88,16 +88,25 @@ function dot(graph: Graph, colorBy: "calls" | "failure"): string {
   return lines.join("\n");
 }
 
+// The fewest times an arrow must be taken for the map of `keep` tools to draw
+// about two arrows per tool, beyond which a map is more knot than map.
+function readableMinEdge(facet: Facet, keep: number): number {
+  const counts = sessionGraph(facet, keep, 1).graph.edges.map((e) => e.count as number).sort((a, b) => b - a);
+  return Math.max(1, counts[2 * keep - 1] ?? 1);
+}
+
 export function processMap(facet: Facet): HTMLElement {
   const tools = of("tools", facet).sort((a, b) => b.calls - a.calls);
   if (!tools.length) return empty();
-  const state = { object: "session", tool: tools[0].tool as string, keep: Math.min(14, tools.length), minEdge: 1, colorBy: "calls" as "calls" | "failure" };
+  const keep = Math.min(14, tools.length);
+  const state = { object: "session", tool: tools[0].tool as string, keep, minEdge: readableMinEdge(facet, keep), colorBy: "calls" as "calls" | "failure" };
+  const busiest = Math.max(1, ...of("dfg", facet).map((e) => e.count as number));
   const canvas = el("div", { class: "process", role: "img", "aria-label": "Process map of the calls" });
   const caption = el("p", { class: "note" });
 
   const toolSelect = el("select", { "aria-label": "Tool" }, ...tools.map((t) => el("option", { value: t.tool }, t.tool)));
   const keepInput = el("input", { type: "range", min: "3", max: String(Math.max(3, tools.length)), value: String(state.keep) });
-  const edgeInput = el("input", { type: "range", min: "1", max: "20", value: "1" });
+  const edgeInput = el("input", { type: "range", min: "1", max: String(Math.min(busiest, 50)), value: String(state.minEdge) });
   const keepLabel = el("span");
   const edgeLabel = el("span");
   const toolControl = el("label", {}, "Tool", toolSelect);

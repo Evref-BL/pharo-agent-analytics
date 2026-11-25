@@ -157,3 +157,8 @@ def test_the_event_log_is_ocel_2(analysed, tmp_path):
     log = json.loads((tmp_path / "log.json").read_text())
     assert {"objectTypes", "eventTypes", "objects", "events"} <= log.keys()
     assert len(log["events"]) == db.execute("SELECT count(*) FROM event").fetchone()[0]
+
+
+def test_a_value_the_filter_could_not_name_reads_as_other():
+    assert report.plain("_OTHER") == "(other)"
+    assert report.plain(["evaluate", "_OTHER"]) == ["evaluate", "(other)"]
