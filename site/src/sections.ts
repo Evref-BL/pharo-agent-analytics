@@ -27,7 +27,7 @@ function hidden(what: string): string {
 export function overview(facet: Facet): HTMLElement {
   const m = meta();
   const unit = m.period === "day" ? "day" : "week";
-  const { root, body } = section("overview", "Overview", `What agents asked of the tools, ${unit} by ${unit}.`);
+  const { root, body } = section("overview", "Overview", `What agents asked of the tools, ${unit} by ${unit}. The spans run from ${m.first} to ${m.last}.`);
   const weekly = of("weekly", facet).sort((a, b) => a.week.localeCompare(b.week));
   const tools = of("tools", facet);
   const sessions = of("sessions", facet);

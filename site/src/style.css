@@ -91,6 +91,8 @@
 }
 
 * { box-sizing: border-box; }
+/* The hidden attribute wins over any display a rule sets: a view the reader turned off is gone. */
+[hidden] { display: none !important; }
 body {
   margin: 0;
   background: var(--page);
@@ -98,7 +100,7 @@ body {
   font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 h1, h2, h3 { text-wrap: balance; line-height: 1.2; margin: 0; }
-h1 { font-size: 1.9rem; letter-spacing: -0.01em; }
+h1 { font-size: 1.3rem; letter-spacing: -0.01em; }
 h2 { font-size: 1.35rem; }
 h3 { font-size: 1rem; font-weight: 600; }
 p { margin: 0; }
@@ -130,13 +132,11 @@ body::before {
   display: flex;
   flex-wrap: wrap;
   gap: 16px 32px;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
-  padding-block: 14px;
+  padding-block: 10px;
 }
-.eyebrow { color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.72rem; }
-.lede { color: var(--ink-2); margin-top: 6px; max-width: 70ch; }
-.facet { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
+.facet { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--muted); }
 .facet select {
   font: inherit;
   font-size: 0.9rem;
@@ -153,7 +153,7 @@ body::before {
 main { padding-block: 24px 64px; display: flex; flex-direction: column; gap: 40px; }
 section, [data-view] { scroll-margin-top: calc(var(--masthead-h, 120px) + 16px); }
 section { display: flex; flex-direction: column; gap: 16px; }
-.section-head { display: flex; flex-direction: column; gap: 6px; max-width: 75ch; }
+.section-head { display: flex; flex-direction: column; gap: 6px; }
 .section-head p { color: var(--ink-2); }
 .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); }
 .card {
@@ -200,7 +200,7 @@ details[open] > summary { margin-bottom: 8px; }
 .variant { font: 0.8rem ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); word-break: break-word; }
 .process svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
 .process { overflow: auto; max-height: 820px; }
-.method { max-width: 75ch; display: flex; flex-direction: column; gap: 10px; color: var(--ink-2); }
+.method { display: flex; flex-direction: column; gap: 10px; color: var(--ink-2); }
 .method h3 { color: var(--ink); margin-top: 8px; }
 .method li { margin-bottom: 4px; }
 
@@ -218,7 +218,6 @@ details[open] > summary { margin-bottom: 8px; }
   font-size: 0.84rem;
   color: var(--ink);
 }
-.warning p { max-width: 80ch; }
 .warning.banner { font-size: 0.9rem; padding: 10px 14px; }
 .warning-icon { flex: none; width: 16px; height: 16px; margin-top: 2px; }
 
@@ -383,10 +382,8 @@ details[open] > summary { margin-bottom: 8px; }
 
 /* A phone's masthead stays one title and one row of controls. */
 @media (max-width: 700px) {
-  .masthead-inner { padding-block: 10px; gap: 8px; }
-  .eyebrow { display: none; }
-  h1 { font-size: 1.2rem; }
-  .lede { font-size: 0.78rem; margin-top: 2px; }
+  .masthead-inner { padding-block: 8px; gap: 6px; }
+  h1 { font-size: 1.1rem; }
   .masthead-controls { width: 100%; flex-wrap: nowrap; align-items: center; gap: 8px; }
   .facet { flex: 1; min-width: 0; }
   .facet > span { display: none; }

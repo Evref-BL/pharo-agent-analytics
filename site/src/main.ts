@@ -6,7 +6,7 @@ import { agentSection } from "./agent";
 import { markovSection } from "./markov";
 import { count, el } from "./ui";
 import { buildToc, setUpToc } from "./toc";
-import { applyVisibility, applyWarnings, fillPanel } from "./views";
+import { applyVisibility, applyWarnings, fillPanel, setUpViewsMenu } from "./views";
 
 const FILES = [
   "meta", "facets", "weekly", "tools", "dfg", "tool-use-dfg", "variants", "recovery", "recovery-curves", "schema",
@@ -25,12 +25,10 @@ const FACET_LABELS: Record<string, string> = {
 async function main() {
   await load(FILES);
   const m = meta();
-  const lede = document.getElementById("lede")!;
   if (!m) {
-    lede.textContent = "No data: run `pharo-agent-analytics build` first.";
+    document.getElementById("report")!.append(el("p", { class: "empty" }, "No data: run `pharo-agent-analytics build` first."));
     return;
   }
-  lede.textContent = `${count(m.calls)} tool calls in ${count(m.sessions)} sessions, from ${m.first} to ${m.last}.`;
 
   const select = document.getElementById("facet") as HTMLSelectElement;
   select.append(el("option", { value: "all|all" }, `All calls (${count(m.calls)})`));
@@ -48,6 +46,7 @@ async function main() {
   const summary = document.querySelector<HTMLElement>("#views > summary")!;
   const toc = document.getElementById("toc")!;
   setUpToc();
+  setUpViewsMenu();
   let facet: Facet = { facet: "all", value: "all" };
   const render = () => {
     report.replaceChildren(

@@ -114,6 +114,24 @@ export function applyVisibility(report: HTMLElement): void {
   }
 }
 
+/** The Views menu closes when the reader clicks or moves the focus elsewhere, or presses Escape. */
+export function setUpViewsMenu(): void {
+  const menu = document.getElementById("views") as HTMLDetailsElement;
+  document.addEventListener("click", (event) => {
+    if (menu.open && !menu.contains(event.target as Node)) menu.open = false;
+  });
+  menu.addEventListener("focusout", (event) => {
+    const next = event.relatedTarget as Node | null;
+    if (next && !menu.contains(next)) menu.open = false;
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && menu.open) {
+      menu.open = false;
+      menu.querySelector("summary")?.focus();
+    }
+  });
+}
+
 /** The panel that turns views on and off, grouped by section, each marked when it warns or lacks its data. */
 export function fillPanel(panel: HTMLElement, summary: HTMLElement, report: HTMLElement, changed: () => void): void {
   const all = views(report);
