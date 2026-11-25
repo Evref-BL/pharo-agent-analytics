@@ -46,6 +46,7 @@ def test_the_report_carries_its_warnings(connection, tmp_path):  # noqa: F811
     meta = report.write(connection, tmp_path, max_phases=2)
     assert meta["enough"] == sufficiency.ENOUGH
     warnings = json.loads((tmp_path / "warnings.json").read_text())
-    assert warnings["columns"] == ["facet", "facet_value", "view", "message"]
-    views = {r[2] for r in warnings["rows"] if r[0] == "all"}
-    assert "report" in views and "recovery" in views
+    assert warnings["columns"] == ["facet", "facet_value", "view", "message", "shown"]
+    shown = {r[2]: r[4] for r in warnings["rows"] if r[0] == "all"}
+    assert shown["report"] == "note" and shown["recovery"] == "note"
+    assert all(shown[v] == "sign" for v in sufficiency.SESSION_SHARES)

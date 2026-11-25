@@ -141,8 +141,10 @@ too few for what they show, and why. A view warns when:
 - most sessions follow a sequence no other session shares, on the most
   common sessions.
 
-The report shows each warning on its view, and the facet's own above the
-report. Its Views menu hides views, those with few data or none among them;
+The report shows each warning in a note under its view's title, and the
+facet's own above the report; a sign in the corner of every view a warning
+concerns, the views showing shares of the facet's sessions among them, says
+why on hover or tap. Its Views menu hides views, those with few data or none among them;
 the choice stays in the reader's browser.
 
 ## Thresholds

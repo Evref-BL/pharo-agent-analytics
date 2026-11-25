@@ -229,6 +229,36 @@ details[open] > summary { margin-bottom: 8px; }
 .warning p { max-width: 80ch; }
 .warning.banner { font-size: 0.9rem; padding: 10px 14px; }
 .warning-icon { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+
+/* The corner sign of a view a warning concerns, and its tooltip. */
+.card[data-warning] { position: relative; }
+.card[data-warning] > h3 { padding-right: 28px; }
+.flag { position: absolute; top: 12px; right: 12px; z-index: 3; }
+.flag-button { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: help; }
+.flag-button:hover, .flag-button:focus-visible { background: var(--warning-wash); }
+.flag-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.flag-button .warning-icon { margin: 0; }
+.flag .tip {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: min(320px, calc(100vw - 48px));
+  margin-top: 4px;
+  background: var(--surface);
+  border: 1px solid var(--axis);
+  border-left: 3px solid var(--warning);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  color: var(--ink);
+  flex-direction: column;
+  gap: 6px;
+}
+/* A bridge over the gap, so the pointer can reach the tooltip. */
+.flag .tip::before { content: ""; position: absolute; inset: -6px 0 auto; height: 6px; }
+.flag:hover .tip, .flag:focus-within .tip, .flag.open .tip { display: flex; }
 .warning-shape { fill: var(--warning); stroke: var(--warning); stroke-width: 1.5; stroke-linejoin: round; }
 .warning-mark { stroke: var(--warning-ink); stroke-width: 1.6; stroke-linecap: round; fill: none; }
 

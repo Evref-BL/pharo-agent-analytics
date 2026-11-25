@@ -49,7 +49,33 @@ export function warning(text: string, banner = false): HTMLElement {
     icon(), el("p", {}, el("strong", {}, "Few data. "), text));
 }
 
-/** Put the build's warnings for this facet on the views they concern; the report's own goes on top. */
+let signs = 0;
+
+/** A sign in the view's corner, found at a glance; hovering, focusing or tapping it says why. */
+function sign(view: HTMLElement, text: string): void {
+  let tip = view.querySelector<HTMLElement>(":scope > .flag .tip");
+  if (!tip) {
+    const id = `few-data-${++signs}`;
+    tip = el("div", { class: "tip", role: "tooltip", id }, el("strong", {}, "Few data"));
+    const button = el("button", { type: "button", class: "flag-button", "aria-label": "Few data", "aria-describedby": id }, icon());
+    const flag = el("span", { class: "flag" }, button, tip);
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      flag.classList.toggle("open");
+    });
+    view.append(flag);
+  }
+  tip.append(el("p", {}, text));
+}
+
+// A tapped sign stays open until a tap elsewhere or Escape.
+const closeSigns = () => document.querySelectorAll(".flag.open").forEach((f) => f.classList.remove("open"));
+document.addEventListener("click", closeSigns);
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeSigns(); });
+
+/** Put the build's warnings for this facet on the views they concern: the
+ * facet's own above the report, each view's in a note under its title, and a
+ * sign in the corner of every view a warning concerns. */
 export function applyWarnings(report: HTMLElement, facet: Facet): void {
   for (const row of of("warnings", facet)) {
     if (row.view === "report") {
@@ -58,8 +84,13 @@ export function applyWarnings(report: HTMLElement, facet: Facet): void {
     }
     const view = report.querySelector<HTMLElement>(`[data-view="${CSS.escape(row.view)}"]`);
     if (!view) continue;
-    const anchor = view.querySelector(":scope > p.note") ?? view.querySelector(":scope > h3");
-    anchor?.after(warning(row.message));
+    if (row.shown === "sign") {
+      sign(view, `${row.message} The note above the report says so for every view.`);
+    } else {
+      const anchor = view.querySelector(":scope > p.note") ?? view.querySelector(":scope > h3");
+      anchor?.after(warning(row.message));
+      sign(view, "The note under the title says what these calls are too few for.");
+    }
     view.dataset.warning = "true";
   }
 }

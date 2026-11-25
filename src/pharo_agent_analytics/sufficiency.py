@@ -31,6 +31,10 @@ def half_width(n: int) -> float:
     return Z * math.sqrt(0.25 / n + z2 / (4 * n * n)) / (1 + z2 / n)
 
 
+#: The views that show shares of the facet's sessions: the facet's own warning
+#: concerns them too, shown on them as a sign whose details are above the report.
+SESSION_SHARES = ("weekly-failure", "tools", "tool-inventory")
+
 #: The fewest observations whose shares are known to ±ROUGH.
 ENOUGH = next(n for n in range(1, 10_000) if half_width(n) <= ROUGH)
 
@@ -149,7 +153,9 @@ def releases(table: dict[str, Any] | None) -> str | None:
 
 
 def warnings(files: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
-    """The warnings of every facet, as a report file: facet, facet_value, view, message."""
+    """The warnings of every facet, as a report file: facet, facet_value, view,
+    message, and how the view shows it: its own note ("note"), or a sign whose
+    details are the facet's note above the report ("sign")."""
     out: list[list[Any]] = []
     sessions = {key: rows[0]["sessions"] for key, rows in _by_facet(files.get("facets")).items()}
     sessions[("all", "all")] = meta["sessions"]
@@ -161,11 +167,13 @@ def warnings(files: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
     green_rows = _by_facet(files.get("green-curves"))
     variant_rows = _by_facet(files.get("variants"))
     for key, n in sorted(sessions.items()):
-        def add(view: str, message: str | None) -> None:
+        def add(view: str, message: str | None, shown: str = "note") -> None:
             if message:
-                out.append([key[0], key[1], view, message])
+                out.append([key[0], key[1], view, message, shown])
 
         add("report", sessions_of(n))
+        for view in SESSION_SHARES:
+            add(view, sessions_of(n), "sign")
         add("markov-order", order(order_rows.get(key, [])))
         add("markov-memory", memory(order_rows.get(key, []), memory_rows.get(key, [])))
         add("phases", phases(phase_rows.get(key, [])))
@@ -179,5 +187,5 @@ def warnings(files: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
         add("variants", variants(variant_rows.get(key, []), n, meta.get("minSessions", 1)))
     add_release = releases(files.get("releases"))
     if add_release:
-        out.append(["all", "all", "releases", add_release])
-    return {"columns": ["facet", "facet_value", "view", "message"], "rows": out}
+        out.append(["all", "all", "releases", add_release, "note"])
+    return {"columns": ["facet", "facet_value", "view", "message", "shown"], "rows": out}
