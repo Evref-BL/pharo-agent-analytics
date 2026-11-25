@@ -111,9 +111,9 @@ estimate more, and the view warns rather than being left out (see Few data).
 
 ## What each view needs
 
-| View | Needs | The study's spans |
+| View | Needs | Spans a filter cut to the week |
 | --- | --- | --- |
-| the agent's time, answer time, arrows by time, the chain's time | each call's start and duration in its session | yes, by offset |
+| the agent's time, answer time, arrows by time, the chain's time | each call's start and duration in its session | yes, when the filter keeps each call's offset in its session |
 | hours | real times | no: weeks only |
 | turns | the host's trace context with each call | no |
 | the host's time, model, agent, tokens | the host's own spans (GenAI conventions) in the same traces; `fetch` reads those of the traces that hold a call | no |

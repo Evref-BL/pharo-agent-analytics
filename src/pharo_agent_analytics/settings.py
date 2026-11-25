@@ -1,4 +1,4 @@
-"""Where Elasticsearch is and the key that reads it.
+"""Where Elasticsearch is, the key that reads it, and the indices that hold the spans.
 
 The environment wins, so a scheduled job sets its variables; on a machine, a
 settings file holds them, out of the repository:
@@ -13,7 +13,10 @@ import binascii
 import os
 from pathlib import Path
 
-NAMES = ("ELASTICSEARCH_URL", "ELASTICSEARCH_API_KEY", "ELASTICSEARCH_CA_FILE")
+NAMES = ("ELASTICSEARCH_URL", "ELASTICSEARCH_API_KEY", "ELASTICSEARCH_CA_FILE", "ELASTICSEARCH_INDEX")
+
+#: The OpenTelemetry Collector's Elasticsearch exporter writes spans to these data streams.
+DEFAULT_INDEX = "traces-*.otel-*"
 
 
 def settings_file() -> Path:

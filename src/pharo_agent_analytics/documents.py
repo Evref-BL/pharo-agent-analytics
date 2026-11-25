@@ -3,12 +3,12 @@
 Every source ends up as one JSON document per span: `@timestamp` (its start),
 `duration_ms`, `trace_id`, `span_id`, `parent_span_id`, `name`, `kind`,
 `status`, `status_message`, `scope`, `resource`, `attributes`, `events`, and
-an `_id`. It is the shape pharo-agent-telemetry-import indexes, plus what that
-import leaves out.
+an `_id`: one span per document, OTLP's field names at the top level, as an
+import of a collector's files may index them.
 
 - OTLP JSON, as a collector's file exporter writes it or an OTLP/HTTP request
   carries it: `otlp_documents`.
-- Elasticsearch documents of that import, or of the OpenTelemetry Collector's
+- Elasticsearch documents of that shape, or of the OpenTelemetry Collector's
   Elasticsearch exporter in its default `otel` mapping: `hit_document`.
 """
 

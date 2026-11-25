@@ -69,10 +69,11 @@ def fetch(args: argparse.Namespace) -> int:
         print(problem, file=sys.stderr)
         return 2
     client = Elasticsearch(url, key, values.get("ELASTICSEARCH_CA_FILE"))
+    index = args.index or values.get("ELASTICSEARCH_INDEX") or settings.DEFAULT_INDEX
     connection = store.connect(args.database)
     try:
         batch, total, new = [], 0, 0
-        for document in client.documents(args.index, args.since):
+        for document in client.documents(index, args.since):
             batch.append(document)
             if len(batch) == 10_000:
                 new += store.load_documents(connection, batch)
@@ -82,7 +83,7 @@ def fetch(args: argparse.Namespace) -> int:
         total += len(batch)
         # Calls that carried their caller's trace context: the host's own spans of those traces.
         traces = [t for (t,) in connection.execute(store.CALLER_TRACES).fetchall()]
-        hosted = store.load_documents(connection, list(client.related(args.index, traces))) if traces else 0
+        hosted = store.load_documents(connection, list(client.related(index, traces))) if traces else 0
     except ElasticsearchError as error:
         print(error, file=sys.stderr)
         return 1
@@ -126,9 +127,8 @@ def main(argv: list[str] | None = None) -> int:
     command.set_defaults(run=load)
 
     command = commands.add_parser("fetch", help="read the spans from Elasticsearch")
-    command.add_argument("--index", default=os.environ.get("ELASTICSEARCH_INDEX", "pharo-agent-traces-*,traces-*.otel-*"),
-                         help="the indices: pharo-agent-telemetry-import's, and the OpenTelemetry Collector "
-                              "exporter's data streams (default %(default)s)")
+    command.add_argument("--index", help="the indices or data streams, comma-separated (default: ELASTICSEARCH_INDEX, "
+                                          f"else {settings.DEFAULT_INDEX}, the OpenTelemetry Collector exporter's)")
     command.add_argument("--since", help="the first week to read, YYYY-MM-DD (default: all)")
     command.set_defaults(run=fetch)
 

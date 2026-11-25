@@ -64,7 +64,7 @@ def server(monkeypatch):
 
 def test_every_page_is_read_and_the_point_in_time_closed(server):
     client = elasticsearch.Elasticsearch(server, KEY)
-    assert [d["_id"] for d in client.documents("pharo-agent-traces-*")] == ["d0", "d1", "d2", "d3", "d4"]
+    assert [d["_id"] for d in client.documents("traces-*")] == ["d0", "d1", "d2", "d3", "d4"]
     searches = [body for path, body, _ in Stub.requests if path == "/_search"]
     assert [s.get("search_after") for s in searches] == [None, [1], [3], [4]]
     assert searches[-1]["pit"]["id"] == "pit-2"
@@ -78,9 +78,10 @@ def test_fetch_loads_the_documents_from_the_settings_file(server, tmp_path, monk
     monkeypatch.delenv("ELASTICSEARCH_API_KEY", raising=False)
     (tmp_path / "pharo-agent-analytics").mkdir()
     (tmp_path / "pharo-agent-analytics" / "elasticsearch.env").write_text(
-        f"# read-only key\nELASTICSEARCH_URL={server}\nELASTICSEARCH_API_KEY={KEY}\n")
+        f"# read-only key\nELASTICSEARCH_URL={server}\nELASTICSEARCH_API_KEY={KEY}\nELASTICSEARCH_INDEX=study-traces-*\n")
     database = tmp_path / "spans.duckdb"
     assert cli.main(["--database", str(database), "fetch"]) == 0
+    assert Stub.requests[0][0].startswith("/study-traces-*/_pit?")
     assert cli.main(["--database", str(database), "fetch"]) == 0
     connection = store.connect(database)
     assert connection.execute("SELECT count(*), count(DISTINCT doc_id) FROM spans").fetchone() == (5, 5)

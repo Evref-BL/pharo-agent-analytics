@@ -1,7 +1,8 @@
 [project]
 name = "pharo-agent-analytics"
 version = "0.1.0"
-description = "The Pharo agent tools' field telemetry as an object-centric event log, analyses and a visual report"
+description = "What agents do with the Pharo agent tools, from their OpenTelemetry spans: an OCEL 2.0 event log, analyses, Markov models and a visual report"
+readme = "README.md"
 authors = [
     { name = "Gabriel Darbord", email = "78592838+Gabriel-Darbord@users.noreply.github.com" }
 ]
@@ -11,6 +12,9 @@ dependencies = [
     "duckdb>=2.0.1",
     "numpy>=2.5",
 ]
+
+[project.urls]
+Repository = "https://github.com/Evref-BL/pharo-agent-analytics"
 
 [project.scripts]
 pharo-agent-analytics = "pharo_agent_analytics.cli:main"
