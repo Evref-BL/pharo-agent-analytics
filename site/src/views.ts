@@ -28,7 +28,7 @@ function save(): void {
   }
 }
 
-function icon(): SVGSVGElement {
+export function icon(): SVGSVGElement {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
   svg.setAttribute("viewBox", "0 0 16 16");
@@ -101,23 +101,22 @@ function views(report: HTMLElement): HTMLElement[] {
 
 const lacks = (view: HTMLElement) => view.querySelector(".lacking") != null;
 
-/** Hide the views the reader turned off, and a section with none left, with its link. */
+/** Hide the views the reader turned off, and a section with none left. */
 export function applyVisibility(report: HTMLElement): void {
   for (const view of views(report)) view.hidden = hidden.has(view.dataset.view!);
   for (const section of report.querySelectorAll<HTMLElement>("section")) {
     const own = [...section.querySelectorAll<HTMLElement>("[data-view]")];
     section.hidden = own.length > 0 && own.every((v) => v.hidden);
-    const link = document.querySelector<HTMLElement>(`.sections a[href="#${section.id}"]`);
-    if (link) link.hidden = section.hidden;
   }
 }
 
 /** The panel that turns views on and off, grouped by section, each marked when it warns or lacks its data. */
-export function fillPanel(panel: HTMLElement, summary: HTMLElement, report: HTMLElement): void {
+export function fillPanel(panel: HTMLElement, summary: HTMLElement, report: HTMLElement, changed: () => void): void {
   const all = views(report);
   const update = () => {
     save();
     applyVisibility(report);
+    changed();
     const n = all.filter((v) => hidden.has(v.dataset.view!)).length;
     summary.textContent = n ? `Views · ${n} hidden` : "Views";
     for (const box of panel.querySelectorAll<HTMLInputElement>("input[type=checkbox]")) box.checked = !hidden.has(box.value);

@@ -5,6 +5,7 @@ import {
 import { agentSection } from "./agent";
 import { markovSection } from "./markov";
 import { count, el } from "./ui";
+import { buildToc, setUpToc } from "./toc";
 import { applyVisibility, applyWarnings, fillPanel } from "./views";
 
 const FILES = [
@@ -45,6 +46,8 @@ async function main() {
   const report = document.getElementById("report")!;
   const panel = document.getElementById("views-panel")!;
   const summary = document.querySelector<HTMLElement>("#views > summary")!;
+  const toc = document.getElementById("toc")!;
+  setUpToc();
   let facet: Facet = { facet: "all", value: "all" };
   const render = () => {
     report.replaceChildren(
@@ -52,7 +55,8 @@ async function main() {
       argumentsSection(facet), discovery(facet), tests(facet), timeAndSize(facet), agentSection(facet), releases(), method(),
     );
     applyWarnings(report, facet);
-    fillPanel(panel, summary, report);
+    // The sidebar follows the views shown, drawn again when the reader changes them.
+    fillPanel(panel, summary, report, () => buildToc(toc, report));
     applyVisibility(report);
   };
   select.addEventListener("change", () => {
@@ -64,6 +68,8 @@ async function main() {
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
   new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   render();
+  // The report is drawn after the page loads: go to the section or view a link named.
+  if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
 }
 
 main();

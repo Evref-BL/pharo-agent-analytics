@@ -15,6 +15,7 @@
           <p class="lede" id="lede">Loading…</p>
         </div>
         <div class="masthead-controls">
+          <button type="button" class="toc-button" id="toc-button" aria-controls="toc" aria-expanded="false">Contents</button>
           <label class="facet">
             <span>Calls of</span>
             <select id="facet" aria-label="Which calls the report shows"></select>
@@ -25,23 +26,12 @@
           </details>
         </div>
       </div>
-      <nav class="sections" aria-label="Sections">
-        <a href="#overview">Overview</a>
-        <a href="#tools">Tools</a>
-        <a href="#process">Process map</a>
-        <a href="#markov">Markov models</a>
-        <a href="#variants">Sessions</a>
-        <a href="#failures">After a failure</a>
-        <a href="#arguments">Arguments</a>
-        <a href="#discovery">Discovery</a>
-        <a href="#tests">Tests</a>
-        <a href="#time">Time and size</a>
-        <a href="#agent">The agent's side</a>
-        <a href="#releases">Releases</a>
-        <a href="#method">Method</a>
-      </nav>
     </header>
-    <main id="report"></main>
+    <div class="layout">
+      <nav class="toc" id="toc" aria-label="Contents"></nav>
+      <div class="toc-backdrop" id="toc-backdrop"></div>
+      <main id="report"></main>
+    </div>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>
