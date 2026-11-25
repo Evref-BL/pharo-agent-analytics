@@ -14,7 +14,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import documents, ocel, report, store
+from . import documents, ocel, report, settings, store
 from .elasticsearch import Elasticsearch, ElasticsearchError
 
 DEFAULT_DATABASE = Path(os.environ.get("PHARO_AGENT_ANALYTICS_DB", "data/spans.duckdb"))
@@ -41,11 +41,16 @@ def load(args: argparse.Namespace) -> int:
 
 
 def fetch(args: argparse.Namespace) -> int:
-    url, key = os.environ.get("ELASTICSEARCH_URL"), os.environ.get("ELASTICSEARCH_API_KEY")
+    values = settings.elasticsearch()
+    url, key = values.get("ELASTICSEARCH_URL"), values.get("ELASTICSEARCH_API_KEY")
     if not (url and key):
-        print("Set ELASTICSEARCH_URL and ELASTICSEARCH_API_KEY (a key that may read the index).", file=sys.stderr)
+        print(f"Set ELASTICSEARCH_URL and ELASTICSEARCH_API_KEY (a key that may read the index), "
+              f"in the environment or in {settings.settings_file()}.", file=sys.stderr)
         return 2
-    client = Elasticsearch(url, key, os.environ.get("NODE_EXTRA_CA_CERTS") or os.environ.get("SSL_CERT_FILE"))
+    if problem := settings.key_problem(key):
+        print(problem, file=sys.stderr)
+        return 2
+    client = Elasticsearch(url, key, values.get("ELASTICSEARCH_CA_FILE"))
     connection = store.connect(args.database)
     try:
         batch, total, new = [], 0, 0

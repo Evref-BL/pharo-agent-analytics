@@ -18,6 +18,19 @@ cd site && npm ci && npm run dev                    # the report, from site/publ
 npm run build                                       # static files in site/dist
 ```
 
+`fetch` reads `ELASTICSEARCH_URL` and `ELASTICSEARCH_API_KEY` (the `encoded`
+field of the answer that made the key, which may only read the index) from
+the environment, or else from
+`~/.config/pharo-agent-analytics/elasticsearch.env` (`$XDG_CONFIG_HOME` when
+set), lines of `NAME=value`. `ELASTICSEARCH_CA_FILE` names a CA bundle when
+the server's certificate needs one. A key that may only read:
+
+```
+POST /_security/api_key
+{"name": "pharo-agent-analytics", "role_descriptors": {"read-traces": {"indices": [
+  {"names": ["pharo-agent-traces-*"], "privileges": ["read", "view_index_metadata"]}]}}}
+```
+
 The spans stay in `data/spans.duckdb`, and nothing made from them is
 committed. The report holds aggregates only: a host or release with fewer
 sessions than `--min-sessions` (3) has no view of its own, and a sequence,
