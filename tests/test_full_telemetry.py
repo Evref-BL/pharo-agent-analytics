@@ -130,3 +130,19 @@ def test_the_collectors_elasticsearch_documents_load(tmp_path):
     connection = store.connect(database)
     row = connection.execute("SELECT kind, status, status_message, duration_ms, time_precise, service_version FROM spans").fetchone()
     assert row == ("server", "error", "No class named Foo", 250.0, True, "4.5.0")
+
+
+def test_a_request_refused_as_the_callers_fault_is_a_failed_call(tmp_path):
+    # The conventions leave a server's span unmarked for -32602: only its code says the call was refused.
+    spans = [
+        image_span("r1", "q1", "class_get", T0, 0.1, "y"),
+        image_span("r2", "q2", "clas_get", T0 + 10 * SECOND, 0.1, "y", **{"rpc.status_code": "-32602"}),
+    ]
+    lines = tmp_path / "refused.jsonl"
+    lines.write_text(json.dumps(request(spans)) + "\n")
+    database = tmp_path / "spans.duckdb"
+    assert cli.main(["--database", str(database), "load", str(lines)]) == 0
+    connection = store.connect(database)
+    store.build_model(connection)
+    rows = connection.execute("SELECT tool, rpc_status_code, failed FROM calls ORDER BY seq").fetchall()
+    assert rows == [("class_get", None, False), ("clas_get", "-32602", True)]

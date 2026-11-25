@@ -22,6 +22,7 @@ EVENT_ATTRIBUTES = {
     "status": "string",
     "error_kind": "string",
     "error_type": "string",
+    "rpc_status_code": "string",
     "plexus_error_code": "string",
     "entry": "string",
     "dispatched": "boolean",

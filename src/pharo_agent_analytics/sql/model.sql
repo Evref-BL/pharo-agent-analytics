@@ -59,6 +59,7 @@ SELECT
     px.status                                          AS plexus_status,
     im.status                                          AS image_status,
     coalesce(im.error_type, px.error_type)             AS error_type,
+    coalesce(im.rpc_status_code, pc.rpc_status_code, px.rpc_status_code) AS rpc_status_code,
     im.error_kind,
     im.error_code,
     px.plexus_error_code,
@@ -123,7 +124,7 @@ SELECT
     CASE WHEN im.dispatched THEN 'dispatch' ELSE 'image' END,
     im.dispatched,
     im.tool, im.tool_origin, im.status, im.status_message, NULL, im.status,
-    im.error_type, im.error_kind, im.error_code, NULL, im.request_id, NULL, NULL,
+    im.error_type, im.rpc_status_code, im.error_kind, im.error_code, NULL, im.request_id, NULL, NULL,
     TRUE, TRUE,
     im.duration_ms, im.duration_ms,
     im.mcp_client, im.mcp_client_version,
@@ -180,9 +181,11 @@ SELECT *,
        nullif(regexp_extract(pharo_version, '(\d+\.\d+)', 1), '') AS pharo_release,
        row_number() OVER session_order                    AS seq,
        count(*) OVER (PARTITION BY session_id)            AS session_calls,
-       -- A refused argument (-32602) is not an error on a server span, by the conventions, but it is a failed call.
-       (status = 'error' OR error_type IS NOT NULL OR error_kind IS NOT NULL
-        OR plexus_error_code IS NOT NULL)                 AS failed
+       -- A call failed when the agent did not get what it asked for: the client's side. The conventions
+       -- leave a server's span unmarked for a request it refused as the caller's fault (-32602 among
+       -- them), and count it on the client's; rpc.status_code says it either way.
+       (status = 'error' OR error_type IS NOT NULL OR rpc_status_code IS NOT NULL
+        OR error_kind IS NOT NULL OR plexus_error_code IS NOT NULL) AS failed
 FROM (SELECT cu.* REPLACE (coalesce(cu.session_id, 'call ' || cu.call_id) AS session_id),
              th.model, th.provider, th.agent_name,
              -- The host's own span of the call, from its request to the answer it got.
