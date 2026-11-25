@@ -62,6 +62,7 @@ function dot(graph: Graph, colorBy: "calls" | "failure", arrows: Arrows): string
   const muted = token("--muted");
   const ring = token("--axis");
   const seqInk = token("--seq-ink");
+  const surface = token("--surface");
   const maxCalls = Math.max(1, ...[...graph.nodes.values()].map((n) => n.calls));
   const maxEdge = Math.max(1, ...graph.edges.map((e) => e.count));
   const maxGap = Math.max(1, ...graph.edges.map((e) => (e.median_gap_ms as number | null) ?? 0));
@@ -75,9 +76,13 @@ function dot(graph: Graph, colorBy: "calls" | "failure", arrows: Arrows): string
     `graph [rankdir=TB, bgcolor="transparent", nodesep=0.35, ranksep=0.45, fontname="system-ui", pad=0.2];`,
     `node [shape=box, style="rounded,filled", fontname="system-ui", fontsize=11, penwidth=1, color=${quote(ring)}, fontcolor=${quote(seqInk)}, margin="0.14,0.06"];`,
     `edge [fontname="system-ui", fontsize=9, color=${quote(muted)}, fontcolor=${quote(ink2)}, arrowsize=0.6];`,
-    `${quote(START)} [shape=circle, label="", width=0.18, style=filled, fillcolor=${quote(ink)}, color=${quote(ink)}, tooltip="start"];`,
-    `${quote(END)} [shape=doublecircle, label="", width=0.14, style=filled, fillcolor=${quote(ink)}, color=${quote(ink)}, tooltip="end"];`,
   ];
+  // The start and the end, drawn with the marks the captions and tables use, when an arrow reaches them.
+  const used = new Set(graph.edges.flatMap((e) => [e.source as string, e.target as string]));
+  const mark = (name: string, label: string) =>
+    `${quote(name)} [shape=box, style="rounded,filled", label=${quote(label)}, fillcolor=${quote(ink)}, color=${quote(ink)}, fontcolor=${quote(surface)}, fontsize=10, tooltip=${quote(label)}];`;
+  if (used.has(START)) lines.push(mark(START, `${START} start`));
+  if (used.has(END)) lines.push(mark(END, `${END} end`));
   for (const [name, node] of graph.nodes) {
     if (name === START || name === END) continue;
     const failure = node.calls ? node.failed / node.calls : 0;
@@ -143,14 +148,14 @@ export function processMap(facet: Facet): HTMLElement {
       const built = sessionGraph(facet, state.keep, state.minEdge);
       graph = built.graph;
       caption.textContent =
-        `Each box is a tool, each arrow a call that followed another in a session; ▶ starts and ■ ends a session. ` +
+        `Each box is a tool, each arrow a call that followed another in a session, from ▶ start to ■ end. ` +
         `${state.keep} of ${built.total} tools, arrows taken at least ${state.minEdge} time${state.minEdge > 1 ? "s" : ""}. ` +
         `Shade: ${state.colorBy === "calls" ? "how often the tool is called" : "the share of its calls that failed"}. ` +
         `${ARROWS[state.arrows]}. Click a tool to follow its own use.`;
     } else {
       graph = toolUseGraph(facet, state.tool, state.minEdge);
       caption.textContent =
-        `The life of ${state.tool} within each session: the calls that named it (a search), then its own calls, ok or failed. ` +
+        `The life of ${state.tool} within each session, from ▶ start: the calls that named it (a search), then its own calls, ok or failed. ` +
         `An arrow from failed to ok is a recovery; failed to failed, a repeat. ` +
         `${state.arrows === "share" ? "Arrows: the chance of what comes next in the tool's life" : ARROWS[state.arrows]}.`;
     }

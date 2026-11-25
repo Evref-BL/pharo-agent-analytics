@@ -76,7 +76,7 @@ function memory(facet: Facet): HTMLElement {
   const k = meta().minSessions;
   const rows = of("markov-memory", facet).filter((r) => r.gain_bits > 0).slice(0, 15);
   const view = card("markov-memory", "Where the call before last matters",
-    "Pairs of calls after which the next call differs most from what the last call alone predicts, ranked by the information the earlier call adds over the times the pair occurred." +
+    "Pairs of calls after which the next call differs most from what the last call alone predicts, ranked by the information the earlier call adds over the times the pair occurred. ▶ is a session's start, ■ its end." +
       (k > 1 ? ` Pairs shared by fewer than ${k} sessions are not shown.` : ""));
   view.chart.append(rows.length ? table(rows, [
     { key: "before", label: "Before" },
