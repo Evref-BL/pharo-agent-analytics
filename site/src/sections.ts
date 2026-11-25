@@ -666,7 +666,7 @@ export function method(): HTMLElement {
           ? "Some spans carry the calls' arguments and answers (content capture was on): the report compares a repeated call's arguments and names the classes and messages of evaluate's code, but shows no value, answer or code."
           : "The spans hold no argument value or answer (content capture was off) and no prompt: the report says where agents struggle, never why.")),
       el("h3", {}, "Few data"),
-      el("p", {}, `A view warns when the calls are too few for what it shows: when its shares rest on fewer than ${m.enough ?? 39} calls or sessions, so their 95 % interval is wider than ±${Math.round(100 * (m.rough ?? 0.15))} points, or when the criteria that choose a model disagree, AIC and BIC choosing less memory or fewer phases than held-out sessions. The Views menu hides views, those with few data among them.`),
+      el("p", {}, `A view warns when the calls are too few for what it shows: when its shares rest on fewer than ${m.enough ?? 39} calls or sessions, so their 95 % interval is wider than ±${Math.round(100 * (m.rough ?? 0.15))} points, or when the criteria that choose a model disagree, AIC and BIC choosing less memory or fewer phases than held-out sessions. The filter at the top of the sidebar hides views, those with few data among them.`),
       el("h3", {}, "What these spans could not give"),
       ((missing) => missing.length
         ? el("ul", {}, ...missing.map((text) => el("li", {}, text)))

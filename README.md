@@ -81,7 +81,8 @@ Export everything the tools and the agent host send to the same place:
 
 Each view that needs one of these says so when the spans lack it, and each
 view whose calls are too few for what it shows carries a warning; the
-report's Views menu hides the views a reader does not want.
+filter at the top of the report's sidebar hides the views a reader does not
+want.
 
 ## Filtered spans
 

@@ -1,5 +1,6 @@
 // What the reader sees of the report: the build's warnings on the views
-// whose calls are too few, and the views the reader chose to show.
+// whose calls are too few, and the views the reader chose to show (chosen in
+// the sidebar's filter).
 //
 // Every view is an element with `data-view`; the warnings name views by the
 // same ids. The choice of views is a convenience of this browser only.
@@ -103,7 +104,16 @@ function views(report: HTMLElement): HTMLElement[] {
   return [...report.querySelectorAll<HTMLElement>("[data-view]")];
 }
 
-const lacks = (view: HTMLElement) => view.querySelector(".lacking") != null;
+/** The view shows nothing: these spans lack what it needs. */
+export const lacks = (view: HTMLElement) => view.querySelector(".lacking") != null;
+
+export const isHidden = (id: string) => hidden.has(id);
+
+/** Turn views off or on, and remember it in this browser. */
+export function setHidden(ids: string[], hide: boolean): void {
+  for (const id of ids) hide ? hidden.add(id) : hidden.delete(id);
+  save();
+}
 
 /** Hide the views the reader turned off, and a section with none left. */
 export function applyVisibility(report: HTMLElement): void {
@@ -112,79 +122,4 @@ export function applyVisibility(report: HTMLElement): void {
     const own = [...section.querySelectorAll<HTMLElement>("[data-view]")];
     section.hidden = own.length > 0 && own.every((v) => v.hidden);
   }
-}
-
-/** The Views menu closes when the reader clicks or moves the focus elsewhere, or presses Escape. */
-export function setUpViewsMenu(): void {
-  const menu = document.getElementById("views") as HTMLDetailsElement;
-  document.addEventListener("click", (event) => {
-    if (menu.open && !menu.contains(event.target as Node)) menu.open = false;
-  });
-  menu.addEventListener("focusout", (event) => {
-    const next = event.relatedTarget as Node | null;
-    if (next && !menu.contains(next)) menu.open = false;
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && menu.open) {
-      menu.open = false;
-      menu.querySelector("summary")?.focus();
-    }
-  });
-}
-
-/** The panel that turns views on and off, grouped by section, each marked when it warns or lacks its data. */
-export function fillPanel(panel: HTMLElement, summary: HTMLElement, report: HTMLElement, changed: () => void): void {
-  const all = views(report);
-  const update = () => {
-    save();
-    applyVisibility(report);
-    changed();
-    const n = all.filter((v) => hidden.has(v.dataset.view!)).length;
-    summary.textContent = n ? `Views · ${n} hidden` : "Views";
-    for (const box of panel.querySelectorAll<HTMLInputElement>("input[type=checkbox]")) box.checked = !hidden.has(box.value);
-    for (const refresh of refreshers) refresh();
-  };
-  // Each action counts the views it would change, and is off when it would change none.
-  const refreshers: (() => void)[] = [];
-  const action = (label: string, pick: (v: HTMLElement) => boolean, show: boolean) => {
-    const button = el("button", { type: "button" });
-    const targets = () => all.filter((v) => pick(v) && hidden.has(v.dataset.view!) === show);
-    refreshers.push(() => {
-      const n = targets().length;
-      button.textContent = n ? `${label} (${n})` : label;
-      button.disabled = !n;
-    });
-    button.addEventListener("click", () => {
-      for (const v of targets()) show ? hidden.delete(v.dataset.view!) : hidden.add(v.dataset.view!);
-      update();
-    });
-    return button;
-  };
-  const groups = [...report.querySelectorAll<HTMLElement>("section")].map((section) => {
-    const own = [...section.querySelectorAll<HTMLElement>("[data-view]")].filter((v) => v.querySelector("h3"));
-    if (!own.length) return null;
-    return el("fieldset", {},
-      el("legend", {}, section.querySelector("h2")?.textContent ?? section.id),
-      ...own.map((view) => {
-        const id = view.dataset.view!;
-        const box = el("input", { type: "checkbox", value: id });
-        box.checked = !hidden.has(id);
-        box.addEventListener("change", () => {
-          box.checked ? hidden.delete(id) : hidden.add(id);
-          update();
-        });
-        return el("label", {}, box, el("span", {}, view.querySelector("h3")!.textContent ?? id),
-          view.dataset.warning ? el("span", { class: "badge few" }, icon(), "few data") : null,
-          lacks(view) ? el("span", { class: "badge lacking" }, "no data here") : null);
-      }));
-  });
-  panel.replaceChildren(
-    el("p", { class: "note" }, "Choose the views to show; the choice stays in this browser. Views marked few data carry a warning for these calls."),
-    el("div", { class: "views-actions" },
-      action("Show all", () => true, true),
-      action("Hide those these spans cannot fill", lacks, false),
-      action("Hide those with few data", (v) => v.dataset.warning === "true", false)),
-    ...groups.filter((g): g is HTMLFieldSetElement => g != null),
-  );
-  update();
 }

@@ -144,8 +144,11 @@ too few for what they show, and why. A view warns when:
 The report shows the facet's own warning above the report, and one mark on
 each view a warning concerns: its own warning as a note under its title, or,
 on a view showing shares of the facet's sessions with no warning of its own,
-a sign in its corner that says why on hover or tap. Its Views menu hides views, those with few data or none among them;
-the choice stays in the reader's browser.
+a sign in its corner that says why on hover or tap.
+
+The sidebar lists the sections and views. Its filter button switches it to
+a box per view and per section, with shortcuts to hide the views with few
+data or none; the choice stays in the reader's browser.
 
 ## Thresholds
 

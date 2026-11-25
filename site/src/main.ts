@@ -6,7 +6,7 @@ import { agentSection } from "./agent";
 import { markovSection } from "./markov";
 import { count, el } from "./ui";
 import { buildToc, setUpToc } from "./toc";
-import { applyVisibility, applyWarnings, fillPanel, setUpViewsMenu } from "./views";
+import { applyVisibility, applyWarnings } from "./views";
 
 const FILES = [
   "meta", "facets", "weekly", "tools", "dfg", "tool-use-dfg", "variants", "recovery", "recovery-curves", "schema",
@@ -42,11 +42,8 @@ async function main() {
   }
 
   const report = document.getElementById("report")!;
-  const panel = document.getElementById("views-panel")!;
-  const summary = document.querySelector<HTMLElement>("#views > summary")!;
   const toc = document.getElementById("toc")!;
   setUpToc();
-  setUpViewsMenu();
   let facet: Facet = { facet: "all", value: "all" };
   const render = () => {
     report.replaceChildren(
@@ -54,9 +51,8 @@ async function main() {
       argumentsSection(facet), discovery(facet), tests(facet), timeAndSize(facet), agentSection(facet), releases(), method(),
     );
     applyWarnings(report, facet);
-    // The sidebar follows the views shown, drawn again when the reader changes them.
-    fillPanel(panel, summary, report, () => buildToc(toc, report));
     applyVisibility(report);
+    buildToc(toc, report);
   };
   select.addEventListener("change", () => {
     const [kind, value] = select.value.split("|");

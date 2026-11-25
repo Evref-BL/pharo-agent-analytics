@@ -254,38 +254,6 @@ details[open] > summary { margin-bottom: 8px; }
 .warning-mark { stroke: var(--warning-ink); stroke-width: 1.6; stroke-linecap: round; fill: none; }
 
 .masthead-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; position: relative; }
-.views-menu > summary {
-  list-style: none;
-  font-size: 0.9rem;
-  color: var(--ink);
-  background: var(--page);
-  border: 1px solid var(--axis);
-  border-radius: 6px;
-  padding: 6px 12px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.views-menu > summary::-webkit-details-marker { display: none; }
-.views-menu[open] > summary { margin-bottom: 0; background: var(--ink); color: var(--surface); }
-.views-panel {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 6;
-  width: min(440px, calc(100vw - 32px));
-  max-height: 70vh;
-  overflow: auto;
-  background: var(--surface);
-  border: 1px solid var(--axis);
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  font-size: 0.85rem;
-}
-@media (max-width: 600px) { .views-panel { left: 0; right: auto; } }
 .views-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .views-actions button {
   font: inherit;
@@ -298,9 +266,6 @@ details[open] > summary { margin-bottom: 8px; }
   cursor: pointer;
 }
 .views-actions button:disabled { color: var(--muted); cursor: default; }
-.views-panel fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
-.views-panel legend { font-weight: 600; color: var(--ink); padding: 0; margin-bottom: 4px; }
-.views-panel label { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; color: var(--ink-2); }
 .badge { display: inline-flex; gap: 4px; align-items: center; font-size: 0.72rem; border-radius: 4px; padding: 0 6px; border: 1px solid var(--ring); color: var(--ink-2); }
 .badge.few { background: var(--warning-wash); color: var(--ink); }
 .badge .warning-icon { width: 11px; height: 11px; margin: 0; }
@@ -310,7 +275,34 @@ details[open] > summary { margin-bottom: 8px; }
 .phase-chart h4 { margin: 0 0 6px; font-size: 0.85rem; font-weight: 600; color: var(--ink-2); }
 
 /* The sidebar of sections and views: beside the report on a wide screen, a drawer on a narrow one. */
-.toc-title { color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.7rem; margin: 0 0 8px 8px; }
+.toc { display: flex; flex-direction: column; gap: 10px; }
+.toc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-left: 8px; }
+.toc-title { color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.7rem; margin: 0; }
+.toc-count { text-transform: none; letter-spacing: 0; }
+.toc-mode {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--axis);
+  border-radius: 6px;
+  background: var(--page);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.toc-mode:hover { color: var(--ink); background: var(--grid); }
+.toc-mode[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.toc-mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mode-icon { width: 18px; height: 18px; fill: currentColor; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.mode-icon path { fill: none; }
+.toc > .note { padding-left: 8px; }
+.toc .views-actions { padding-left: 8px; }
+.toc-filter label { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 3px 8px; border-radius: 5px; font-size: 0.8rem; color: var(--ink-2); cursor: pointer; }
+.toc-filter label:hover { background: var(--grid); }
+.toc-filter .toc-section > label { font-weight: 600; color: var(--ink); font-size: 0.84rem; }
+.toc-filter li.off > label > span, .toc-filter li.lacking > label > span { color: var(--muted); }
+.toc-filter input { margin: 0; accent-color: var(--accent); }
 .toc ul { list-style: none; margin: 0; padding: 0; }
 .toc > ul { display: flex; flex-direction: column; gap: 10px; }
 .toc a {
@@ -388,5 +380,5 @@ details[open] > summary { margin-bottom: 8px; }
   .facet { flex: 1; min-width: 0; }
   .facet > span { display: none; }
   .facet select { min-width: 0; width: 100%; padding: 5px 6px; }
-  .toc-button, .views-menu > summary { padding: 5px 10px; }
+  .toc-button { padding: 5px 10px; }
 }
