@@ -181,3 +181,13 @@ def test_the_report_carries_the_markov_models_of_every_facet(analysed, tmp_path)
         key = (row[facet], row[value], row[source])
         totals[key] = totals.get(key, 0) + row[share]
     assert all(abs(t - 1) < 1e-4 for t in totals.values()), totals  # shares are written to six decimals
+
+
+def test_a_filtered_export_still_makes_every_file_and_says_what_it_lacks(analysed, tmp_path):
+    meta = report.write(analysed, tmp_path, max_phases=2)
+    assert not any(meta[k] for k in ("timePrecise", "callerContext", "hostSpans", "tokens", "evaluateCode", "content"))
+    for name in ("time-split", "agent-time", "answer-time", "hours", "traces", "host", "tokens", "evaluate-words"):
+        data = json.loads((tmp_path / f"{name}.json").read_text())
+        assert "rows" in data
+    for name in ("hours", "traces", "host", "tokens", "evaluate-words"):
+        assert json.loads((tmp_path / f"{name}.json").read_text())["rows"] == []

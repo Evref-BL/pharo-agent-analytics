@@ -48,12 +48,26 @@ class Elasticsearch:
 
     def documents(self, index: str, since: str | None = None) -> Iterator[dict[str, Any]]:
         """Every span document of the Pharo tools in `index` (patterns, comma-separated), from `since` (ISO date) on."""
-        pit = self.request("POST", f"{index}/_pit?keep_alive=2m&ignore_unavailable=true")["id"]
         # Only the Pharo tools' spans: an index the Collector writes holds every service's.
         filters: list[dict[str, Any]] = [{"terms": {"scope.name": list(SCOPES)}}]
         if since:
             filters.append({"range": {"@timestamp": {"gte": since}}})
-        query: dict[str, Any] = {"bool": {"filter": filters}}
+        yield from self.search(index, {"bool": {"filter": filters}})
+
+    def related(self, index: str, trace_ids: list[str]) -> Iterator[dict[str, Any]]:
+        """The agent host's own spans in the traces of calls that carried its
+        context: those the GenAI conventions describe (a model call, an
+        agent, its tool call), and none of another service's work."""
+        for begin in range(0, len(trace_ids), 1_000):
+            query = {"bool": {
+                "filter": [{"terms": {"trace_id": trace_ids[begin:begin + 1_000]}},
+                           {"exists": {"field": "attributes.gen_ai.operation.name"}}],
+                "must_not": [{"terms": {"scope.name": list(SCOPES)}}],
+            }}
+            yield from self.search(index, query)
+
+    def search(self, index: str, query: dict[str, Any]) -> Iterator[dict[str, Any]]:
+        pit = self.request("POST", f"{index}/_pit?keep_alive=2m&ignore_unavailable=true")["id"]
         after = None
         try:
             while True:

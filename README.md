@@ -10,7 +10,8 @@ visual report.
 It reads whatever exported the spans, filtered or not: your own collector's
 files, a trace store, or an Elasticsearch index. It uses what the spans hold,
 from the bare names a study keeps to the full conventions, error messages,
-real times and captured content.
+real times and captured content, and the agent host's own spans in the same
+traces: its turns, its time for each call, the model and the tokens.
 
 ```sh
 uv sync
@@ -63,6 +64,22 @@ POST /_security/api_key
 
 The spans stay in `data/spans.duckdb`, and nothing made from them is
 committed.
+
+## Unfiltered spans
+
+Export everything the tools and the agent host send to the same place:
+
+- the agent host's spans by the GenAI conventions (`invoke_agent`, `chat`,
+  `execute_tool`), with the trace context it passes in each call's `_meta`,
+  give turns, the host's time for each call, the model, the agent and the
+  tokens;
+- content capture (`gen_ai.tool.call.arguments`) tells a repeat by its
+  arguments, and gives the classes and messages of the code sent to
+  `evaluate`, never the code;
+- `build --facet ATTRIBUTE` adds a facet for any resource attribute, such as
+  a team set in `OTEL_RESOURCE_ATTRIBUTES`.
+
+Each view that needs one of these says so when the spans lack it.
 
 ## Filtered spans
 

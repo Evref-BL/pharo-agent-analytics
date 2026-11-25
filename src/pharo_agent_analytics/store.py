@@ -43,6 +43,16 @@ def load_documents(connection: duckdb.DuckDBPyConnection, documents: Iterable[di
         Path(out.name).unlink(missing_ok=True)
 
 
+#: The traces whose calls carried a caller's context: a parent span none of the tools' spans is.
+CALLER_TRACES = """
+SELECT DISTINCT s.trace_id FROM spans s
+WHERE s.scope_name IN ('mcp-pharo', '@evref-bl/plexus') AND s.kind = 'server'
+  AND nullif(s.parent_span_id, '') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM spans p WHERE p.trace_id = s.trace_id AND p.span_id = s.parent_span_id
+                  AND p.scope_name IN ('mcp-pharo', '@evref-bl/plexus'))
+"""
+
+
 def build_model(connection: duckdb.DuckDBPyConnection) -> None:
     """Calls and sessions, from the spans."""
     connection.execute(sql("model"))

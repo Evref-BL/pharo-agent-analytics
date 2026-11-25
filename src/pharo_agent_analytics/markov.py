@@ -20,19 +20,20 @@ import numpy as np
 
 START, END = "▶", "■"
 
-#: A call: the tool, and whether it failed.
-Call = tuple[str, bool]
+#: A call: the tool, whether it failed, and how long the session stayed in it
+#: (until the next call started, in ms), when the spans tell.
+Call = tuple[str, bool, float | None]
 
 
 def sequences(connection, facet_table: str = "faceted") -> dict[tuple[str, str], list[list[Call]]]:
     """The agent's calls of each kept facet, session by session, in order."""
     out: dict[tuple[str, str], dict[str, list[Call]]] = defaultdict(dict)
     rows = connection.execute(
-        f"SELECT facet, facet_value, session_id, tool, failed FROM {facet_table} "
+        f"SELECT facet, facet_value, session_id, tool, failed, hold_ms FROM {facet_table} "
         "JOIN kept USING (facet, facet_value) ORDER BY facet, facet_value, session_id, step"
     ).fetchall()
-    for facet, value, session, tool, failed in rows:
-        out[(facet, value)].setdefault(session, []).append((tool, bool(failed)))
+    for facet, value, session, tool, failed, hold in rows:
+        out[(facet, value)].setdefault(session, []).append((tool, bool(failed), hold))
     return {key: list(sessions.values()) for key, sessions in out.items()}
 
 
@@ -228,15 +229,29 @@ def recovery(seqs: list[list[Call]]) -> list[dict]:
     transitions among the other states and R those into the two, N = (I − Q)⁻¹
     gives the absorption probabilities N·R and the expected calls N·1, and
     the calls until the tool works, given that it does, (N·b) / b.
+
+    When the spans give how long the session stays in each call, the chain is
+    semi-Markov: with h each state's mean holding time, N·h is the time until
+    either happens, and (N·(h ∘ b)) / b the time until the tool works, given
+    that it does.
     """
-    states = sorted({call for seq in seqs for call in seq})
+    states = sorted({(c[0], c[1]) for seq in seqs for c in seq})
     index = {s: i for i, s in enumerate(states)}
     end = len(states)
     counts = np.zeros((len(states), len(states) + 1))
+    held = np.zeros(len(states))
+    holds = np.zeros(len(states))
     for seq in seqs:
-        for a, b in zip(seq, seq[1:]):
-            counts[index[a], index[b]] += 1
-        counts[index[seq[-1]], end] += 1
+        keys = [index[(c[0], c[1])] for c in seq]
+        for a, b in zip(keys, keys[1:]):
+            counts[a, b] += 1
+        counts[keys[-1], end] += 1
+        for key, call in zip(keys, seq):
+            if len(call) > 2 and call[2] is not None:
+                held[key] += call[2]
+                holds[key] += 1
+    timed = bool(holds.all())
+    h = held / np.maximum(holds, 1)
     with np.errstate(invalid="ignore", divide="ignore"):
         P = counts / counts.sum(axis=1, keepdims=True)
     rows = []
@@ -256,9 +271,16 @@ def recovery(seqs: list[list[Call]]) -> list[dict]:
         b_end = N @ to_end
         steps = N @ np.ones(len(transient))
         given = (N @ b_works)[i] / b_works[i] if b_works[i] > 0 else None
+        seconds = seconds_given = None
+        if timed:
+            ht = h[transient]
+            seconds = float((N @ ht)[i]) / 1000
+            if b_works[i] > 0:
+                seconds_given = float((N @ (ht * b_works))[i] / b_works[i]) / 1000
         rows.append({
             "tool": tool, "p_works": float(b_works[i]), "p_ends": float(b_end[i]),
             "expected_calls": float(steps[i]), "calls_if_works": None if given is None else float(given),
+            "expected_seconds": seconds, "seconds_if_works": seconds_given,
         })
     return rows
 
@@ -387,10 +409,10 @@ def phases(seqs: list[list[Call]], max_phases: int = 6, folds: int = 3, heldout_
     sessions are scored while the calls are few enough for folds to be cheap;
     beyond, BIC alone, which then needs no help.
     """
-    tools = sorted({t for seq in seqs for t, _ in seq})
+    tools = sorted({c[0] for seq in seqs for c in seq})
     symbol = {t: i for i, t in enumerate(tools)}
-    encoded = [np.array([symbol[t] for t, _ in seq], dtype=np.int64) for seq in seqs if seq]
-    failed = [np.array([f for _, f in seq], dtype=bool) for seq in seqs if seq]
+    encoded = [np.array([symbol[c[0]] for c in seq], dtype=np.int64) for seq in seqs if seq]
+    failed = [np.array([c[1] for c in seq], dtype=bool) for seq in seqs if seq]
     calls = sum(len(s) for s in encoded)
     if not calls:
         return [], [], [], []

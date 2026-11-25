@@ -37,6 +37,9 @@ where every session starts on the Monday. So:
 | `tool` | the tool's name | everywhere | through its tool uses (`of`) |
 | `agent host` | name and major.minor | everywhere | through sessions (`runs on`) |
 | `release` | MCP or PLexus and its version, or Pharo's major.minor | everywhere | through sessions (`served by`, `runs in`) |
+| `trace` | the caller's trace, when the agent host passed its context | one session | `within`; `of` its session |
+| `agent` | the agent the host's spans name (`gen_ai.agent.name`) | everywhere | `asked by` |
+| `model` | the model of the host's model calls in the call's trace | everywhere | `chosen by` |
 
 `tool use` is what event knowledge graphs call a derived entity: the pair
 (session, tool) reified, so that the directly-follows relation between a
@@ -47,7 +50,8 @@ spans do not keep, which is why `tool` gets none.
 Event attributes: status, error kind and type, PLexus's refusal, entry
 (through PLexus, to the image, dispatched), duration, answer size and whether
 it was cut, result count and whether there were more, test outcome and count,
-the call's place in its session.
+the call's place in its session, the host's time for it and the agent's
+time after its answer, when the spans give them.
 
 Not exported: anything below the report's thresholds is still in the log,
 which is call-level. Keep it where the spans are kept.

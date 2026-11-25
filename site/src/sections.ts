@@ -5,11 +5,12 @@ import * as Plot from "@observablehq/plot";
 import * as d3 from "d3";
 import { sankey, sankeyLinkHorizontal, type SankeyLink, type SankeyNode } from "d3-sankey";
 import { all, meta, of, type Facet, type Row } from "./data";
+import { evaluateWords, lacks } from "./agent";
 import { chainRecovery } from "./markov";
 import { processMap } from "./process";
 import {
-  ERROR_KINDS, ERROR_LABELS, card, count, el, empty, errorColor, errorKind, legend, percent,
-  fit, section, segmented, sequential, series, sumBy, table, tableView, token, wilson,
+  ERROR_KINDS, ERROR_LABELS, card, chart, count, el, empty, errorColor, errorKind, legend, percent,
+  section, segmented, sequential, series, sumBy, table, tableView, tile, token, wilson,
 } from "./ui";
 
 const WIDTH = 520;
@@ -20,16 +21,6 @@ function hidden(what: string): string {
   return k > 1 ? ` ${what} shared by fewer than ${k} sessions are not shown.` : "";
 }
 
-function plotStyle(): Partial<Plot.PlotOptions> {
-  return {
-    style: { background: "transparent", color: token("--ink-2"), fontFamily: "system-ui, sans-serif", fontSize: "11px", overflow: "visible" },
-    marginLeft: 48,
-  };
-}
-
-function chart(options: Plot.PlotOptions): Element {
-  return fit(Plot.plot({ ...plotStyle(), ...options }));
-}
 
 // ---------------------------------------------------------------- overview
 
@@ -90,9 +81,6 @@ export function overview(facet: Facet): HTMLElement {
   return root;
 }
 
-function tile(value: string, label: string, sub: string): HTMLElement {
-  return el("div", { class: "tile" }, el("div", { class: "value" }, value), el("div", { class: "label" }, label), el("div", { class: "sub" }, sub));
-}
 
 // ---------------------------------------------------------------- tools
 
@@ -495,7 +483,7 @@ export function discovery(facet: Facet): HTMLElement {
     { key: "tool", label: "Tool" }, { key: "next_action", label: "Then" },
     { key: "calls", label: "Calls", numeric: true, format: count }, { key: "sessions", label: "Sessions", numeric: true, format: count },
   ]) : empty());
-  body.append(funnelCard.root, fallback.root, moreCard.root);
+  body.append(funnelCard.root, fallback.root, evaluateWords(facet), moreCard.root);
   return root;
 }
 
@@ -675,10 +663,14 @@ export function method(): HTMLElement {
           ? "A filter chose what these spans keep before they were exported; what it dropped, this report cannot show."
           : "These spans are as the tools sent them."),
         el("li", {}, m.content
-          ? "Some spans carry the calls' arguments and answers (content capture was on); the report counts them, but shows none."
-          : "The spans hold no argument value or answer (content capture was off), no prompt and no model: the report says where agents struggle, never why.")),
+          ? "Some spans carry the calls' arguments and answers (content capture was on): the report compares a repeated call's arguments and names the classes and messages of evaluate's code, but shows no value, answer or code."
+          : "The spans hold no argument value or answer (content capture was off) and no prompt: the report says where agents struggle, never why.")),
+      el("h3", {}, "What these spans could not give"),
+      ((missing) => missing.length
+        ? el("ul", {}, ...missing.map((text) => el("li", {}, text)))
+        : el("p", {}, "Nothing: every view of this report has what it needs."))(lacks()),
       el("h3", {}, "The event log"),
-      el("p", {}, "The same calls are written as an OCEL 2.0 object-centric event log (`pharo-agent-analytics ocel`): events are calls, objects the session, the tool as used in a session, the input places a call broke, the tool, the agent host and the releases."),
+      el("p", {}, "The same calls are written as an OCEL 2.0 object-centric event log (`pharo-agent-analytics ocel`): events are calls, objects the session, the tool as used in a session, the input places a call broke, the tool, the agent host and the releases, and, when the spans hold them, the host's trace, the agent and the model."),
     ),
   );
   return root;

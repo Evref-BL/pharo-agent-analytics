@@ -19,7 +19,7 @@ from typing import Any
 
 import duckdb
 
-from . import markov
+from . import content, markov
 from .store import sql
 
 #: Tables whose rows tell a sequence or a word, and so need `min_sessions` sessions.
@@ -57,10 +57,21 @@ TABLES = {
     "compile-to-green": "a_compile_to_green",
     "next-entropy": "a_next_entropy",
     "errors": "a_errors",
+    "time-split": "a_time_split",
+    "agent-time": "a_agent_time",
+    "answer-time": "a_answer_time",
+    "hours": "a_hours",
+    "traces": "a_traces",
+    "host": "a_host",
+    "tokens": "a_tokens",
 }
 
 
-def build(connection: duckdb.DuckDBPyConnection) -> None:
+def build(connection: duckdb.DuckDBPyConnection, facets: list[str] | None = None) -> None:
+    """The analyses; `facets` names resource attributes to facet by besides."""
+    connection.execute("CREATE OR REPLACE TABLE custom_facets (key VARCHAR)")
+    for key in facets or []:
+        connection.execute("INSERT INTO custom_facets VALUES (?)", [key])
     connection.execute(sql("analyses"))
 
 
@@ -184,9 +195,10 @@ def markov_files(connection: duckdb.DuckDBPyConnection, min_sessions: int, max_o
     """The Markov models of each kept facet: the chain's order, memory beyond
     one call, what the chain expects after a failure, and hidden phases."""
     observed = {
-        (f, v, t): (n, k, s, m) for f, v, t, n, k, s, m in connection.execute(
+        (f, v, t): (n, k, s, m, ms) for f, v, t, n, k, s, m, ms in connection.execute(
             "SELECT facet, facet_value, tool, count(*), count(recovered_at), count(DISTINCT session_id), "
-            "quantile_cont(recovered_at - step, 0.5) FROM recoveries GROUP BY ALL").fetchall()
+            "quantile_cont(recovered_at - step, 0.5), quantile_cont(recovered_ms, 0.5) "
+            "FROM recoveries GROUP BY ALL").fetchall()
     }
     out: dict[str, list] = defaultdict(list)
     # A facet holding the same calls as another (one release among all
@@ -195,7 +207,7 @@ def markov_files(connection: duckdb.DuckDBPyConnection, min_sessions: int, max_o
     for (facet, value), seqs in sorted(markov.sequences(connection).items()):
         key = tuple(tuple(seq) for seq in seqs)
         if key not in fitted:
-            tools = [[t for t, _ in seq] for seq in seqs]
+            tools = [[c[0] for c in seq] for seq in seqs]
             fitted[key] = (markov.order_test(tools, max_order), markov.memory(tools), markov.recovery(seqs),
                            markov.phases(seqs, max_phases))
         order, memory, chain, (fits, phases, transitions, places) = fitted[key]
@@ -203,14 +215,42 @@ def markov_files(connection: duckdb.DuckDBPyConnection, min_sessions: int, max_o
         out["markov-memory"].append(records([m for m in memory if m["sessions"] >= min_sessions][:40], facet, value))
         recovery = []
         for row in chain:
-            n, k, s, m = observed.get((facet, value, row["tool"]), (0, 0, 0, None))
-            recovery.append({**row, "failures": n, "recovered": k, "sessions": s, "median_calls": m})
+            n, k, s, m, ms = observed.get((facet, value, row["tool"]), (0, 0, 0, None, None))
+            recovery.append({**row, "failures": n, "recovered": k, "sessions": s, "median_calls": m,
+                             "median_seconds": None if ms is None else ms / 1000})
         out["markov-recovery"].append(records(recovery, facet, value))
         out["phase-fits"].append(records(fits, facet, value))
         out["phases"].append(records(phases, facet, value))
         out["phase-transitions"].append(records(transitions, facet, value))
         out["phase-places"].append(records(places, facet, value))
     return {name: merge(parts) for name, parts in out.items()}
+
+
+def evaluate_words(connection: duckdb.DuckDBPyConnection, min_sessions: int) -> dict[str, Any]:
+    """The classes and messages of the code agents asked evaluate to run, when
+    content was captured: per facet, the calls and sessions naming each, and
+    how many came right after a failed call. Words fewer sessions share than
+    the threshold are not written."""
+    counts: dict[tuple, dict[str, Any]] = {}
+    for facet, value, session, prev_failed, arguments in connection.execute(
+        "SELECT facet, facet_value, session_id, coalesce(prev_failed, FALSE), content_arguments FROM faceted "
+        "JOIN kept USING (facet, facet_value) WHERE tool = 'evaluate' AND content_arguments IS NOT NULL"
+    ).fetchall():
+        code = content.code_of(arguments)
+        if not code:
+            continue
+        classes, messages = content.words(code)
+        for kind, names in (("class", classes), ("message", messages)):
+            for name in names:
+                entry = counts.setdefault((facet, value, kind, name), {"calls": 0, "sessions": set(), "after_failure": 0})
+                entry["calls"] += 1
+                entry["sessions"].add(session)
+                entry["after_failure"] += bool(prev_failed)
+    columns = ["facet", "facet_value", "kind", "name", "calls", "sessions", "after_failure"]
+    out = [[f, plain(v), kind, name, e["calls"], len(e["sessions"]), e["after_failure"]]
+           for (f, v, kind, name), e in counts.items() if len(e["sessions"]) >= min_sessions]
+    out.sort(key=lambda r: (r[0], r[1], r[2], -r[4]))
+    return {"columns": columns, "rows": out}
 
 
 def write(connection: duckdb.DuckDBPyConnection, out: Path, min_sessions: int = 1, catalog: Path | None = None,
@@ -226,6 +266,7 @@ def write(connection: duckdb.DuckDBPyConnection, out: Path, min_sessions: int = 
     files["facets"] = rows(connection, "SELECT f.* FROM facets f JOIN kept USING (facet, facet_value) ORDER BY facet, calls DESC")
     files["images"] = rows(connection, "SELECT * FROM a_images WHERE sessions >= ? ORDER BY spans DESC", [min_sessions])
     files.update(markov_files(connection, min_sessions, max_order, max_phases))
+    files["evaluate-words"] = evaluate_words(connection, min_sessions)
     if catalog:
         files["published"] = published_tools(catalog)
     totals = connection.execute(
@@ -245,6 +286,14 @@ def write(connection: duckdb.DuckDBPyConnection, out: Path, min_sessions: int = 
         "content": bool(connection.execute(
             "SELECT count(*) > 0 FROM spans WHERE json_exists(attributes, '$.\"gen_ai.tool.call.arguments\"')").fetchone()[0]),
         "spans": connection.execute("SELECT count(*) FROM spans").fetchone()[0],
+        # What these spans hold beyond what every export keeps: each view that needs one says so.
+        "sessionTime": bool(connection.execute("SELECT count(agent_ms) > 0 FROM steps").fetchone()[0]),
+        "callerContext": bool(connection.execute("SELECT count(*) FILTER (WHERE caller_span_id IS NOT NULL) > 0 FROM steps").fetchone()[0]),
+        "hostSpans": bool(connection.execute("SELECT count(*) > 0 FROM host_spans").fetchone()[0]),
+        "tokens": bool(connection.execute("SELECT count(*) > 0 FROM session_tokens").fetchone()[0]),
+        "evaluateCode": bool(connection.execute(
+            "SELECT count(*) > 0 FROM steps WHERE tool = 'evaluate' AND content_arguments IS NOT NULL").fetchone()[0]),
+        "customFacets": [k for (k,) in connection.execute("SELECT key FROM custom_facets").fetchall()],
     }
     files["meta"] = meta
     for file, data in files.items():

@@ -17,7 +17,11 @@ SELECT
          ELSE week + to_milliseconds(coalesce(order_ms - min(order_ms) OVER (PARTITION BY session_id), seq)) END AS time,
     status, error_kind, error_type, plexus_error_code, entry, dispatched,
     duration_ms, output_bytes, budget_exceeded, result_count, result_more,
-    test_outcome, test_count, seq
+    test_outcome, test_count, seq,
+    -- The agent host's time for the call, when it traces its tool calls, and the
+    -- agent's own after the answer, until its next call.
+    host_duration_ms,
+    lead(order_ms) OVER (PARTITION BY session_id ORDER BY seq) - (order_ms + duration_ms) AS agent_ms
 FROM calls
 WHERE tool IS NOT NULL;
 
@@ -35,7 +39,15 @@ WHERE ref <> '_OTHER'
 UNION ALL
 -- the places of its input it broke
 SELECT call_id, 'input path:' || session_id || '/' || tool || path, 'breaks'
-FROM (SELECT call_id, session_id, tool, unnest(schema_paths) AS path FROM calls WHERE tool IS NOT NULL);
+FROM (SELECT call_id, session_id, tool, unnest(schema_paths) AS path FROM calls WHERE tool IS NOT NULL)
+UNION ALL
+-- The caller's trace, when the host passed its context: a turn or task of the agent, within one session.
+SELECT call_id, 'trace:' || trace_id, 'within' FROM calls WHERE tool IS NOT NULL AND caller_span_id IS NOT NULL
+UNION ALL
+-- The agent and the model of that trace, when the export holds the host's spans.
+SELECT call_id, 'agent:' || agent_name, 'asked by' FROM calls WHERE tool IS NOT NULL AND agent_name IS NOT NULL
+UNION ALL
+SELECT call_id, 'model:' || model, 'chosen by' FROM calls WHERE tool IS NOT NULL AND model IS NOT NULL;
 
 CREATE OR REPLACE TABLE ocel_objects AS
 SELECT DISTINCT
@@ -74,7 +86,9 @@ SELECT 'session:' || session_id, 'release:MCP ' || mcp_version, 'served by' FROM
 UNION
 SELECT 'session:' || session_id, 'release:PLexus ' || plexus_version, 'served by' FROM sessions WHERE plexus_version IS NOT NULL
 UNION
-SELECT 'session:' || session_id, 'release:Pharo ' || pharo_release, 'runs in' FROM sessions WHERE pharo_release IS NOT NULL;
+SELECT 'session:' || session_id, 'release:Pharo ' || pharo_release, 'runs in' FROM sessions WHERE pharo_release IS NOT NULL
+UNION
+SELECT DISTINCT 'trace:' || trace_id, 'session:' || session_id, 'of' FROM calls WHERE tool IS NOT NULL AND caller_span_id IS NOT NULL;
 
 -- Object attributes, each at the start of time since none changes.
 CREATE OR REPLACE TABLE ocel_object_attributes AS

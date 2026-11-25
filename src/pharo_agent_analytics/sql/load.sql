@@ -79,5 +79,15 @@ SELECT
     attr_list(doc, 'pharo.mcp.error.schema.paths'),
     attr(doc, 'pharo.mcp.exception.type'),
     doc -> 'attributes',
-    doc -> 'events'
+    doc -> 'events',
+    doc -> 'resource',
+    attr(doc, 'gen_ai.tool.call.arguments'),
+    attr(doc, 'gen_ai.tool.call.result'),
+    attr(doc, 'gen_ai.operation.name'),
+    coalesce(attr(doc, 'gen_ai.response.model'), attr(doc, 'gen_ai.request.model')),
+    coalesce(attr(doc, 'gen_ai.provider.name'), attr(doc, 'gen_ai.system')),
+    attr(doc, 'gen_ai.agent.name'),
+    TRY_CAST(attr(doc, 'gen_ai.usage.input_tokens') AS BIGINT),
+    TRY_CAST(attr(doc, 'gen_ai.usage.output_tokens') AS BIGINT),
+    attr(doc, 'gen_ai.conversation.id')
 FROM (SELECT json AS doc FROM read_ndjson_objects($path));

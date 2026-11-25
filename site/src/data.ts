@@ -16,6 +16,13 @@ export interface Meta {
   timePrecise: boolean;
   filtered: boolean;
   content: boolean;
+  /** What these spans hold beyond what every export keeps. */
+  sessionTime: boolean;
+  callerContext: boolean;
+  hostSpans: boolean;
+  tokens: boolean;
+  evaluateCode: boolean;
+  customFacets: string[];
 }
 
 export interface Facet { facet: string; value: string }

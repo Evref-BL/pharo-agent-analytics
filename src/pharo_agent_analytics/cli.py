@@ -80,17 +80,20 @@ def fetch(args: argparse.Namespace) -> int:
                 batch = []
         new += store.load_documents(connection, batch)
         total += len(batch)
+        # Calls that carried their caller's trace context: the host's own spans of those traces.
+        traces = [t for (t,) in connection.execute(store.CALLER_TRACES).fetchall()]
+        hosted = store.load_documents(connection, list(client.related(args.index, traces))) if traces else 0
     except ElasticsearchError as error:
         print(error, file=sys.stderr)
         return 1
-    print(f"{new} new of {total} spans")
+    print(f"{new} new of {total} spans" + (f", and {hosted} of the agent host's in their traces" if hosted else ""))
     return 0
 
 
 def build(args: argparse.Namespace) -> int:
     connection = store.connect(args.database)
     store.build_model(connection)
-    report.build(connection)
+    report.build(connection, args.facet)
     meta = report.write(connection, Path(args.out), args.min_sessions, Path(args.catalog) if args.catalog else None,
                         args.max_order, args.max_phases)
     print(json.dumps(meta))
@@ -138,6 +141,9 @@ def main(argv: list[str] | None = None) -> int:
                                            "catalog, or a JSON list of names")
     command.add_argument("--max-order", type=int, default=3, help="the longest memory the order test tries (default %(default)s)")
     command.add_argument("--max-phases", type=int, default=6, help="the most hidden phases tried (default %(default)s)")
+    command.add_argument("--facet", action="append", default=[], metavar="ATTRIBUTE",
+                         help="a resource attribute to compare by besides host, releases, OS, model and agent "
+                              "(repeatable), such as deployment.environment.name or a team's own")
     command.set_defaults(run=build)
 
     command = commands.add_parser("ocel", help="write the calls as OCEL 2.0")

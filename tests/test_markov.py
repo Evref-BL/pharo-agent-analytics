@@ -116,3 +116,11 @@ def test_baum_welch_never_lowers_the_likelihood():
     one = markov.fit_hmm(seqs, 2, 3, iterations=1, restarts=1)
     many = markov.fit_hmm(seqs, 2, 3, iterations=50, restarts=1)
     assert many.log_likelihood >= one.log_likelihood - 1e-9
+
+
+def test_with_holding_times_the_chain_says_how_long_too():
+    # Failed x (10 s) → y (20 s) → x works: 30 s until x works, every time.
+    seqs = [[("x", True, 10_000), ("y", False, 20_000), ("x", False, 5_000)]] * 4
+    [row] = markov.recovery(seqs)
+    assert row["seconds_if_works"] == pytest.approx(30.0)
+    assert markov.recovery([[("x", True, None), ("x", False, None)]])[0]["seconds_if_works"] is None

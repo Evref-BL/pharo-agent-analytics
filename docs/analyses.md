@@ -2,9 +2,12 @@
 
 Each analysis is a table in `sql/analyses.sql`, computed once per facet: all
 calls, and the calls of each agent host, MCP release, PLexus release, Pharo
-version and environment. Comparing hosts or releases is choosing a facet.
+version, environment, OS and VM, and, when the spans name them, each model
+and agent, and each value of a resource attribute `build --facet` names.
+Comparing hosts or releases is choosing a facet.
 
-The spans hold no prompt or model, and argument values and answers only when
+The tools' spans hold no prompt. The model, the agent and the tokens come
+with the agent host's own spans, and argument values and answers only when
 content capture is on. They say where agents struggle with the tools and how
 they get out of it, rarely why: runs whose transcripts are kept say why. A
 number here points at what to look at; it decides nothing, and each comes
@@ -26,6 +29,12 @@ with the number that would show it being gamed.
   week, it comes from the offset in its session the filter recorded, then
   from PLexus's count of the session's calls, and nothing is ordered across
   sessions.
+- **The agent's time** after a call is from the call's end to the next
+  call's start in its session. Below 100 ms, the two were asked together in
+  one answer of the model; below zero, they overlapped. Offsets in a session
+  are enough, so a filter that keeps only weeks keeps it.
+- **A turn** is the calls one trace of the agent host holds, when the host
+  passes its trace context (W3C `traceparent`) with its calls.
 - **Versions** of agent hosts and of Pharo are compared at major.minor.
 - Calls of one session are not independent: a rate is given per session as
   well as per call, with a Wilson interval on sessions.
@@ -61,6 +70,14 @@ with the number that would show it being gamed.
 | `phases` | Phases a session goes through, unnamed in the spans: a hidden Markov model of 1 to 6 phases | where each phase comes in a session; what phase comes next; each phase's tools | BIC and held-out sessions say how many phases the calls support |
 | `a_releases` | A tool's failure release against release, as it came and with every release given the same mix of agent hosts | forest plot | the share of the mix each release saw |
 | `a_images` | What PLexus did to images: create, start, stop, delete | table | |
+| `a_time_split` | Per tool, its own time against the agent's after the answer; calls asked together or overlapping | dots on a log scale | asked-together and overlapping calls counted apart |
+| `a_agent_time` | How long the agent takes between calls | bars in powers of two | overlap and asked-together shown, not dropped |
+| `a_answer_time` | Whether bigger answers take longer to act on | median and 90th percentile by answer size | answers asked together left out: nobody read them |
+| `a_hours` | When the tools are used, by weekday and hour (UTC) | heatmap | real times only |
+| `a_traces` | How many calls a host's turn takes; turns that met a failure and ended working | bars; tiles | turns of 20 calls or more counted together |
+| `a_host` | What the host adds to a call: its time for it less the tool's | ranges per tool | the host's and the tool's medians in the table |
+| `a_tokens` | What the host's model spent per session, and by model | tiles; table | tool calls beside the tokens |
+| `evaluate-words` | The classes and messages of the code agents give `evaluate`: what a tool could do instead | stacked bars, after a failure or not | words only, never the code; sessions per word, as for sequences |
 
 ## Markov models
 
@@ -79,7 +96,9 @@ per session and facet:
 - **Absorbing chain**: the first-order chain over (tool, worked or failed),
   with the tool working and the session ending absorbing. With N = (I − Q)⁻¹,
   N·R gives the chances of each, N·1 the calls until one happens, and
-  (N·b)/b the calls until the tool works, given that it does.
+  (N·b)/b the calls until the tool works, given that it does. With h each
+  state's mean time until the next call starts (a semi-Markov chain),
+  (N·(h∘b))/b is the time until it works.
 - **Phases**: a hidden Markov model over the tools called, fitted by
   Baum–Welch from three random starts, for 1 to 6 phases (`--max-phases`),
   compared by BIC and, up to 50,000 calls, by held-out sessions (three folds).
@@ -90,6 +109,20 @@ Every model runs on whatever calls there are. When the penalised criteria
 choose less memory or fewer phases than the others, the calls are too few to
 estimate more, and the report says so beside the model rather than leaving it
 out.
+
+## What each view needs
+
+| View | Needs | The study's spans |
+| --- | --- | --- |
+| the agent's time, answer time, arrows by time, the chain's time | each call's start and duration in its session | yes, by offset |
+| hours | real times | no: weeks only |
+| turns | the host's trace context with each call | no |
+| the host's time, model, agent, tokens | the host's own spans (GenAI conventions) in the same traces; `fetch` reads those of the traces that hold a call | no |
+| a repeat with the same arguments, evaluate's words | content capture | no |
+
+A view that lacks what it needs says so, and the report's Method lists what
+these spans could not give. The event log gains the trace, the agent and the
+model as objects when the spans hold them.
 
 ## Thresholds
 

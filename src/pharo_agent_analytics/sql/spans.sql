@@ -71,5 +71,28 @@ CREATE TABLE IF NOT EXISTS spans (
     schema_paths          VARCHAR[],
     exception_type        VARCHAR,
     attributes            JSON,          -- every attribute as it came, content included when captured
-    events                JSON
+    events                JSON,
+    -- Added since the first release: a store made before gets them below.
+    resource              JSON,          -- every resource attribute as it came
+    content_arguments     VARCHAR,       -- with content capture on: the call's arguments, as JSON
+    content_result        VARCHAR,       -- and its answer
+    -- The agent host's own spans, by the GenAI conventions, when an export holds them
+    gen_ai_operation      VARCHAR,       -- chat, invoke_agent, execute_tool...
+    model                 VARCHAR,
+    provider              VARCHAR,
+    agent_name            VARCHAR,
+    input_tokens          BIGINT,
+    output_tokens         BIGINT,
+    conversation_id       VARCHAR
 );
+
+ALTER TABLE spans ADD COLUMN IF NOT EXISTS resource JSON;
+ALTER TABLE spans ADD COLUMN IF NOT EXISTS content_arguments VARCHAR;
+ALTER TABLE spans ADD COLUMN IF NOT EXISTS content_result VARCHAR;
+ALTER TABLE spans ADD COLUMN IF NOT EXISTS gen_ai_operation VARCHAR;
+ALTER TABLE spans ADD COLUMN IF NOT EXISTS model VARCHAR;
+ALTER TABLE spans ADD COLUMN IF NOT EXISTS provider VARCHAR;
+ALTER TABLE spans ADD COLUMN IF NOT EXISTS agent_name VARCHAR;
+ALTER TABLE spans ADD COLUMN IF NOT EXISTS input_tokens BIGINT;
+ALTER TABLE spans ADD COLUMN IF NOT EXISTS output_tokens BIGINT;
+ALTER TABLE spans ADD COLUMN IF NOT EXISTS conversation_id VARCHAR;

@@ -5,17 +5,10 @@
 
 import * as Plot from "@observablehq/plot";
 import { meta, of, type Facet, type Row } from "./data";
-import { card, count, el, empty, fit, legend, percent, section, segmented, sequential, series, table, tableView, token, wilson } from "./ui";
+import { card, chart, count, duration, el, empty, legend, percent, section, segmented, sequential, series, table, tableView, token, wilson } from "./ui";
 
 const WIDTH = 520;
 
-function chart(options: Plot.PlotOptions): Element {
-  return fit(Plot.plot({
-    style: { background: "transparent", color: token("--ink-2"), fontFamily: "system-ui, sans-serif", fontSize: "11px", overflow: "visible" },
-    marginLeft: 48,
-    ...options,
-  }));
-}
 
 const bits = (v: number | null | undefined) => (v == null ? "–" : v.toFixed(2));
 const fixed = (v: number | null | undefined, digits = 1) => (v == null ? "–" : v.toLocaleString("en", { maximumFractionDigits: digits, minimumFractionDigits: digits }));
@@ -191,7 +184,7 @@ export function chainRecovery(facet: Facet): HTMLElement {
   const rows = of("markov-recovery", facet).filter((r) => r.failures > 0).sort((a, b) => b.failures - a.failures).slice(0, 15)
     .map((r): Row => ({ ...r, observed: r.recovered / r.failures, ...wilson(r.recovered, r.failures) }));
   const view = card("What the chain expects after a failure",
-    "The first-order chain over each tool, worked or failed, from every transition of these sessions: from a failed call, the chance the tool works before the session ends (dot), beside the share of failures whose tool did work later (ring, with its 95 % interval). Far apart, what the agent does next depends on more than its last call.");
+    "The first-order chain over each tool, worked or failed, from every transition of these sessions: from a failed call, the chance the tool works before the session ends (dot), beside the share of failures whose tool did work later (ring, with its 95 % interval). Far apart, what the agent does next depends on more than its last call. When the spans keep each call's place in its session, the chain also says how long until the tool works, from each state's mean time (a semi-Markov chain), beside the observed median.");
   if (!rows.length) {
     view.chart.append(empty("No call failed."));
     return view.root;
@@ -206,7 +199,7 @@ export function chainRecovery(facet: Facet): HTMLElement {
         Plot.dot(rows, { y: "tool", x: "observed", r: 5, stroke: token("--series-2"), strokeWidth: 2, fill: token("--surface"),
           tip: true, title: (d: Row) => `${d.tool}: worked later after ${count(d.recovered)} of ${count(d.failures)} failures (${percent(d.observed)})` }),
         Plot.dot(rows, { y: "tool", x: "p_works", r: 4, fill: token("--series-1"), stroke: token("--surface"), strokeWidth: 2,
-          tip: true, title: (d: Row) => `${d.tool}: the chain gives ${percent(d.p_works)}, in ${fixed(d.calls_if_works)} calls when it works` }),
+          tip: true, title: (d: Row) => `${d.tool}: the chain gives ${percent(d.p_works)}, in ${fixed(d.calls_if_works)} calls${d.seconds_if_works != null ? ` and ${duration(d.seconds_if_works * 1000)}` : ""} on average when it works` }),
       ],
     }),
     legend([["the chain", token("--series-1")], ["observed", token("--series-2")]]),
@@ -216,8 +209,12 @@ export function chainRecovery(facet: Facet): HTMLElement {
       { key: "recovered", label: "Worked later", numeric: true, format: count },
       { key: "p_works", label: "Chain: works", numeric: true, format: (v) => percent(v) },
       { key: "p_ends", label: "Chain: ends first", numeric: true, format: (v) => percent(v) },
-      { key: "calls_if_works", label: "Chain: calls until it works", numeric: true, format: (v) => fixed(v) },
+      { key: "calls_if_works", label: "Chain: mean calls until it works", numeric: true, format: (v) => fixed(v) },
       { key: "median_calls", label: "Observed: median calls", numeric: true, format: (v) => fixed(v) },
+      ...(rows.some((r) => r.seconds_if_works != null) ? [
+        { key: "seconds_if_works", label: "Chain: mean time until it works", numeric: true, format: (v: number | null) => duration(v == null ? null : v * 1000) },
+        { key: "median_seconds", label: "Observed: median time", numeric: true, format: (v: number | null) => duration(v == null ? null : v * 1000) },
+      ] : []),
     ]),
   );
   return view.root;

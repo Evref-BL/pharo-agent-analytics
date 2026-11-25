@@ -1,5 +1,6 @@
 // Small pieces every section uses: elements, cards, legends, table views, theme colors.
 
+import * as Plot from "@observablehq/plot";
 import type { Row } from "./data";
 
 export function el<K extends keyof HTMLElementTagNameMap>(
@@ -159,4 +160,27 @@ export function fit<T extends Element>(node: T): T {
     svg.style.minWidth = "420px";
   }
   return node;
+}
+
+/** An Observable Plot chart in the report's style, fitted to its card. */
+export function chart(options: Plot.PlotOptions): Element {
+  return fit(Plot.plot({
+    style: { background: "transparent", color: token("--ink-2"), fontFamily: "system-ui, sans-serif", fontSize: "11px", overflow: "visible" },
+    marginLeft: 48,
+    ...options,
+  }));
+}
+
+export function tile(value: string, label: string, sub: string): HTMLElement {
+  return el("div", { class: "tile" }, el("div", { class: "value" }, value), el("div", { class: "label" }, label), el("div", { class: "sub" }, sub));
+}
+
+/** A duration in milliseconds, as people read it. */
+export function duration(ms: number | null | undefined): string {
+  if (ms == null || Number.isNaN(ms)) return "–";
+  const a = Math.abs(ms);
+  if (a < 1000) return `${Math.round(ms)} ms`;
+  if (a < 60_000) return `${(ms / 1000).toFixed(a < 10_000 ? 1 : 0)} s`;
+  if (a < 3_600_000) return `${(ms / 60_000).toFixed(a < 600_000 ? 1 : 0)} min`;
+  return `${(ms / 3_600_000).toFixed(1)} h`;
 }

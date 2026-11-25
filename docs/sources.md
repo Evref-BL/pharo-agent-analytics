@@ -32,6 +32,14 @@ What the project builds on, read 2026-11-25. Versions are those of that day.
 - OpenTelemetry's MCP conventions: span names, `mcp.method.name`,
   `error.type`, and a refused argument not an error on the server's span.
   https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/mcp.md
+- OpenTelemetry's GenAI conventions for agent and model spans:
+  `invoke_agent`, `chat`, `execute_tool`, `gen_ai.request.model`,
+  `gen_ai.provider.name`, `gen_ai.agent.name`, `gen_ai.usage.input_tokens`
+  and `output_tokens`, `gen_ai.tool.call.arguments` as opt-in content.
+  https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md
+- W3C Trace Context: the `traceparent` a host passes with a call, in MCP
+  through the request's `_meta`, so the tools' spans join the host's trace.
+  https://www.w3.org/TR/trace-context/
 - The OpenTelemetry Collector's Elasticsearch exporter: `otel` mapping by
   default, `traces-generic.otel-default`, span attributes under `attributes`,
   resource ones under `resource.attributes`, duration in nanoseconds, status
@@ -84,6 +92,9 @@ What the project builds on, read 2026-11-25. Versions are those of that day.
 - Absorbing Markov chains: the fundamental matrix, absorption probabilities
   and times (Grinstead and Snell, Introduction to Probability, chapter 11).
   https://math.dartmouth.edu/~prob/prob/prob.pdf
+- Semi-Markov chains: the expected time to absorption is the fundamental
+  matrix times the mean holding times (Howard, Dynamic Probabilistic Systems,
+  vol. II, 1971).
 
 ## Tools
 

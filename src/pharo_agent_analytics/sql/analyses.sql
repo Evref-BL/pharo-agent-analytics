@@ -23,13 +23,21 @@ SELECT
     lead(tool)   OVER w AS next_tool,
     lead(failed) OVER w AS next_failed,
     order_ms - lag(order_ms) OVER w AS gap_ms,
+    -- The agent's time after the call's answer, until its next call starts:
+    -- below zero, the next call started before this one ended.
+    lead(order_ms) OVER w - (order_ms + duration_ms) AS agent_ms,
+    -- How long the session stays in this call: until the next starts, or its own end.
+    coalesce(lead(order_ms) OVER w - order_ms, duration_ms) AS hold_ms,
+    lead(content_arguments) OVER w AS next_content,
     row_number() OVER w AS step,
     count(*) OVER (PARTITION BY session_id) AS session_steps
 FROM calls c
 WHERE NOT dispatched AND tool IS NOT NULL
 WINDOW w AS (PARTITION BY session_id ORDER BY seq);
 
--- Each step once per facet it belongs to.
+-- Each step once per facet it belongs to; `custom_facets` names resource
+-- attributes to facet by besides (build --facet).
+CREATE TABLE IF NOT EXISTS custom_facets (key VARCHAR);
 CREATE OR REPLACE TABLE faceted AS
 SELECT s.*, f.facet, f.facet_value
 FROM steps s,
@@ -38,8 +46,19 @@ FROM steps s,
                      ('MCP', s.mcp_version),
                      ('PLexus', s.plexus_version),
                      ('Pharo', s.pharo_release),
-                     ('environment', s.environment)) f(facet, facet_value)
-WHERE f.facet_value IS NOT NULL;
+                     ('environment', s.environment),
+                     ('OS', s.os_type),
+                     ('VM', s.vm),
+                     ('model', s.model),
+                     ('agent', s.agent_name)) f(facet, facet_value)
+WHERE f.facet_value IS NOT NULL
+UNION ALL BY NAME
+SELECT * FROM (
+    SELECT s.*, k.key AS facet,
+           coalesce(json_extract_string(s.image_resource, '$."' || k.key || '"'),
+                    json_extract_string(s.plexus_resource, '$."' || k.key || '"')) AS facet_value
+    FROM steps s, custom_facets k)
+WHERE facet_value IS NOT NULL;
 
 CREATE OR REPLACE TABLE facets AS
 SELECT facet, facet_value, count(*) AS calls, count(DISTINCT session_id) AS sessions,
@@ -118,22 +137,24 @@ FROM faceted WHERE next_tool IS NULL GROUP BY ALL);
 -- named it (discovery) and that called it, in order. Shows whether a found
 -- tool is then called, and how a tool's calls go after a failure.
 CREATE OR REPLACE TABLE tool_use_events AS
-SELECT facet, facet_value, session_id, step, tool AS object_tool,
+SELECT facet, facet_value, session_id, step, order_ms, tool AS object_tool,
        CASE WHEN failed THEN 'failed' ELSE 'ok' END AS activity
 FROM faceted
 UNION ALL
-SELECT facet, facet_value, session_id, step, ref, 'named by ' || tool
+SELECT facet, facet_value, session_id, step, order_ms, ref, 'named by ' || tool
 FROM (SELECT *, unnest(tool_refs) AS ref FROM faceted WHERE tool_refs IS NOT NULL)
 WHERE ref <> '_OTHER' AND ref <> tool;
 
 CREATE OR REPLACE TABLE a_tool_use_dfg AS
 WITH ordered AS (
-    SELECT *, lag(activity) OVER (PARTITION BY facet, facet_value, session_id, object_tool ORDER BY step, activity DESC) AS prev
+    SELECT *, lag(activity) OVER o AS prev, order_ms - lag(order_ms) OVER o AS gap_ms
     FROM tool_use_events
+    WINDOW o AS (PARTITION BY facet, facet_value, session_id, object_tool ORDER BY step, activity DESC)
 )
 SELECT *, count / sum(count) OVER (PARTITION BY facet, facet_value, tool, source) AS share FROM (
 SELECT facet, facet_value, object_tool AS tool, coalesce(prev, '▶') AS source, activity AS target,
-       count(*) AS count, count(DISTINCT session_id) AS sessions
+       count(*) AS count, count(DISTINCT session_id) AS sessions,
+       quantile_cont(gap_ms, 0.5) AS median_gap_ms
 FROM ordered GROUP BY ALL);
 
 -- Session variants: the sequence of tools, repeats folded (a run of the same
@@ -177,6 +198,10 @@ SELECT f.facet, f.facet_value, f.session_id, f.step, f.tool,
                 CASE WHEN f.error_type = 'tool_error' THEN 'tool_result' END, 'other') AS error_kind,
        CASE
            WHEN f.next_tool IS NULL THEN 'ended the session'
+           -- With content captured, a repeat is the same arguments, values and all.
+           WHEN f.next_tool = f.tool AND f.content_arguments IS NOT NULL AND f.next_content IS NOT NULL
+                THEN CASE WHEN json(f.content_arguments) = json(f.next_content) THEN 'same call again'
+                          ELSE 'same tool, other arguments' END
            WHEN f.next_tool = f.tool
                 AND list_sort(coalesce(f.next_arguments, [])) = list_sort(coalesce(f.arguments, []))
                 AND list_sort(coalesce(f.next_options, [])) = list_sort(coalesce(f.options, [])) THEN 'same call again'
@@ -189,7 +214,11 @@ SELECT f.facet, f.facet_value, f.session_id, f.step, f.tool,
        (SELECT min(later.step) FROM faceted later
          WHERE later.facet = f.facet AND later.facet_value = f.facet_value
            AND later.session_id = f.session_id AND later.tool = f.tool
-           AND later.step > f.step AND NOT later.failed) AS recovered_at
+           AND later.step > f.step AND NOT later.failed) AS recovered_at,
+       (SELECT min(later.order_ms) FROM faceted later
+         WHERE later.facet = f.facet AND later.facet_value = f.facet_value
+           AND later.session_id = f.session_id AND later.tool = f.tool
+           AND later.step > f.step AND NOT later.failed) - f.order_ms AS recovered_ms
 FROM next f
 WHERE f.failed;
 
@@ -384,8 +413,83 @@ SELECT facet, facet_value,
        session_steps AS calls,
        round((max(order_ms) - min(order_ms)) / 60000.0, 1) AS minutes,
        bool_or(failed) AS any_failed,
-       count(DISTINCT tool) AS tools
+       count(DISTINCT tool) AS tools,
+       sum(duration_ms) AS tool_ms,
+       sum(greatest(agent_ms, 0)) AS agent_ms
 FROM faceted GROUP BY facet, facet_value, session_id, session_steps;
+
+-- Time within sessions, wherever the spans give the time between calls
+-- (real times, or a filter's offsets in the session): the tool's time, and the
+-- agent's after the answer until its next call. A next call within 100 ms was
+-- sent before any model could read the answer: asked together with it.
+CREATE OR REPLACE TABLE a_time_split AS
+SELECT facet, facet_value, tool, count(*) AS calls,
+       count(agent_ms) AS followed,
+       quantile_cont(duration_ms, 0.5) AS tool_p50_ms,
+       quantile_cont(duration_ms, 0.9) AS tool_p90_ms,
+       quantile_cont(agent_ms, 0.5) FILTER (WHERE agent_ms >= 100) AS agent_p50_ms,
+       quantile_cont(agent_ms, 0.9) FILTER (WHERE agent_ms >= 100) AS agent_p90_ms,
+       count(*) FILTER (WHERE agent_ms >= 0 AND agent_ms < 100) AS sent_together,
+       count(*) FILTER (WHERE agent_ms < 0) AS overlapped
+FROM faceted WHERE duration_ms IS NOT NULL GROUP BY ALL;
+
+-- The agent's time to its next call, in powers of two of milliseconds; -1
+-- for a next call that started before this one ended.
+CREATE OR REPLACE TABLE a_agent_time AS
+SELECT facet, facet_value,
+       CASE WHEN agent_ms < 0 THEN -1 ELSE CAST(pow(2, floor(log2(greatest(agent_ms, 1)))) AS BIGINT) END AS ms,
+       count(*) AS calls, count(DISTINCT session_id) AS sessions
+FROM faceted WHERE agent_ms IS NOT NULL GROUP BY ALL;
+
+-- How long the agent takes after an answer, by the answer's size: answers
+-- asked together with the next call are left out, nobody having read them.
+CREATE OR REPLACE TABLE a_answer_time AS
+SELECT facet, facet_value, CAST(pow(2, floor(log2(greatest(output_bytes, 1)))) AS BIGINT) AS bytes,
+       count(*) AS calls,
+       quantile_cont(agent_ms, 0.5) AS agent_p50_ms, quantile_cont(agent_ms, 0.9) AS agent_p90_ms
+FROM faceted WHERE output_bytes IS NOT NULL AND agent_ms >= 100 GROUP BY ALL;
+
+-- When the tools are used, by weekday and hour of the times the spans kept
+-- (UTC as exporters write them): real times only.
+CREATE OR REPLACE TABLE a_hours AS
+SELECT facet, facet_value, isodow(start_time) AS weekday, hour(start_time) AS hour,
+       count(*) AS calls, count(DISTINCT session_id) AS sessions
+FROM faceted WHERE time_precise GROUP BY ALL;
+
+-- The caller's traces: when the agent host passes its trace context with a
+-- call, the calls one of its traces holds (a turn or a task, as the host
+-- draws its traces).
+CREATE OR REPLACE TABLE caller_traces AS
+SELECT facet, facet_value, session_id, trace_id, count(*) AS calls,
+       count(*) FILTER (WHERE failed) AS failed, arg_max(failed, step) AS last_failed,
+       count(DISTINCT tool) AS tools
+FROM faceted WHERE caller_span_id IS NOT NULL GROUP BY ALL;
+
+CREATE OR REPLACE TABLE a_traces AS
+SELECT facet, facet_value, least(calls, 20) AS calls, count(*) AS traces, count(DISTINCT session_id) AS sessions,
+       count(*) FILTER (WHERE failed > 0) AS with_failure,
+       count(*) FILTER (WHERE failed > 0 AND NOT last_failed) AS ended_working
+FROM caller_traces GROUP BY ALL;
+
+-- The host's time for a call against the call's own: what passing it through
+-- the host and its transport adds, when the host traces its tool calls.
+CREATE OR REPLACE TABLE a_host AS
+SELECT facet, facet_value, tool, count(*) AS calls,
+       quantile_cont(host_duration_ms, 0.5) AS host_p50_ms,
+       quantile_cont(duration_ms, 0.5) AS tool_p50_ms,
+       quantile_cont(host_duration_ms - duration_ms, 0.5) AS overhead_p50_ms,
+       quantile_cont(host_duration_ms - duration_ms, 0.9) AS overhead_p90_ms
+FROM faceted WHERE host_duration_ms IS NOT NULL AND duration_ms IS NOT NULL GROUP BY ALL;
+
+-- Tokens the host's model calls used, per session, beside the tool calls made.
+CREATE OR REPLACE TABLE a_tokens AS
+SELECT f.facet, f.facet_value, count(*) AS sessions, sum(f.calls) AS tool_calls,
+       sum(t.model_calls) AS model_calls,
+       sum(t.input_tokens) AS input_tokens, sum(t.output_tokens) AS output_tokens,
+       quantile_cont(t.input_tokens, 0.5) AS input_p50, quantile_cont(t.output_tokens, 0.5) AS output_p50
+FROM (SELECT facet, facet_value, session_id, count(*) AS calls FROM faceted GROUP BY ALL) f
+JOIN session_tokens t USING (session_id)
+GROUP BY ALL;
 
 -- What PLexus did for images, from its own spans.
 CREATE OR REPLACE TABLE a_images AS

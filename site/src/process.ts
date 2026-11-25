@@ -3,13 +3,20 @@
 // Two object types have a life worth drawing: the session (which call follows
 // which) and a tool as used in one session (the calls that named it, then its
 // own calls, ok or failed). Time across sessions is not kept, so no other
-// object gets a sequence.
+// object gets a sequence. Arrows show how often a step is taken, its chance
+// (the Markov chain's), or the median time between the two calls' starts.
 
 import type { Viz } from "@viz-js/viz";
 import { of, type Facet, type Row } from "./data";
-import { el, empty, percent, segmented, sequential, token, count } from "./ui";
+import { count, duration, el, empty, percent, segmented, sequential, token } from "./ui";
 
 let viz: Promise<Viz> | null = null;
+
+const ARROWS: Record<string, string> = {
+  count: "Arrows: times taken",
+  share: "Arrows: the chance a call follows the tool, P(next | tool), out of all its next calls, those hidden here included",
+  time: "Arrows: the median time from one call's start to the next's, thicker the longer",
+};
 
 const START = "▶";
 const END = "■";
@@ -17,6 +24,8 @@ const END = "■";
 function quote(text: string): string {
   return `"${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
+
+type Arrows = "count" | "share" | "time";
 
 interface Graph { nodes: Map<string, { calls: number; failed: number }>; edges: Row[] }
 
@@ -46,7 +55,7 @@ function toolUseGraph(facet: Facet, tool: string, minEdge: number): Graph {
   return { nodes, edges };
 }
 
-function dot(graph: Graph, colorBy: "calls" | "failure", arrows: "count" | "share"): string {
+function dot(graph: Graph, colorBy: "calls" | "failure", arrows: Arrows): string {
   const ramp = sequential();
   const ink = token("--ink");
   const ink2 = token("--ink-2");
@@ -55,6 +64,7 @@ function dot(graph: Graph, colorBy: "calls" | "failure", arrows: "count" | "shar
   const seqInk = token("--seq-ink");
   const maxCalls = Math.max(1, ...[...graph.nodes.values()].map((n) => n.calls));
   const maxEdge = Math.max(1, ...graph.edges.map((e) => e.count));
+  const maxGap = Math.max(1, ...graph.edges.map((e) => (e.median_gap_ms as number | null) ?? 0));
   const fill = (node: { calls: number; failed: number }) => {
     const share = colorBy === "calls" ? Math.sqrt(node.calls / maxCalls) : node.calls ? node.failed / node.calls : 0;
     // The light end of the ramp recedes toward the surface; labels stay ink on the first five steps.
@@ -79,9 +89,16 @@ function dot(graph: Graph, colorBy: "calls" | "failure", arrows: "count" | "shar
   for (const e of graph.edges) {
     // By count, how much traffic an arrow carries; by share, the Markov
     // chain's P(target | source), out of everything that followed the source.
-    const width = arrows === "count" ? 0.6 + 5 * Math.sqrt(e.count / maxEdge) : 0.6 + 5 * e.share;
-    const label = arrows === "count" ? (e.count >= maxEdge * 0.04 ? count(e.count) : "") : (e.share >= 0.05 ? percent(e.share) : "");
-    const gap = e.median_gap_ms != null ? `, median ${Math.round(e.median_gap_ms / 1000)} s apart` : "";
+    // By time, the median time from the source call's start to the target's,
+    // on a log scale: the slow steps of a session stand out.
+    const gapMs = e.median_gap_ms as number | null;
+    const width = arrows === "count" ? 0.6 + 5 * Math.sqrt(e.count / maxEdge)
+      : arrows === "share" ? 0.6 + 5 * e.share
+      : gapMs != null && gapMs > 0 ? 0.6 + 5 * Math.log1p(gapMs) / Math.log1p(maxGap) : 0.6;
+    const label = arrows === "count" ? (e.count >= maxEdge * 0.04 ? count(e.count) : "")
+      : arrows === "share" ? (e.share >= 0.05 ? percent(e.share) : "")
+      : gapMs != null && e.count >= maxEdge * 0.04 ? duration(gapMs) : "";
+    const gap = gapMs != null ? `, ${duration(gapMs)} apart at the median` : "";
     lines.push(
       `${quote(e.source)} -> ${quote(e.target)} [penwidth=${width.toFixed(2)}, label=${quote(label)}, tooltip=${quote(`${e.source} → ${e.target}: ${count(e.count)} times in ${count(e.sessions)} sessions, ${percent(e.share)} of what followed ${e.source}${gap}`)}];`,
     );
@@ -101,7 +118,7 @@ export function processMap(facet: Facet): HTMLElement {
   const tools = of("tools", facet).sort((a, b) => b.calls - a.calls);
   if (!tools.length) return empty();
   const keep = Math.min(14, tools.length);
-  const state = { object: "session", tool: tools[0].tool as string, keep, minEdge: readableMinEdge(facet, keep), colorBy: "calls" as "calls" | "failure", arrows: "count" as "count" | "share" };
+  const state = { object: "session", tool: tools[0].tool as string, keep, minEdge: readableMinEdge(facet, keep), colorBy: "calls" as "calls" | "failure", arrows: "count" as Arrows };
   const busiest = Math.max(1, ...of("dfg", facet).map((e) => e.count as number));
   const canvas = el("div", { class: "process", role: "img", "aria-label": "Process map of the calls" });
   const caption = el("p", { class: "note" });
@@ -129,13 +146,13 @@ export function processMap(facet: Facet): HTMLElement {
         `Each box is a tool, each arrow a call that followed another in a session; ▶ starts and ■ ends a session. ` +
         `${state.keep} of ${built.total} tools, arrows taken at least ${state.minEdge} time${state.minEdge > 1 ? "s" : ""}. ` +
         `Shade: ${state.colorBy === "calls" ? "how often the tool is called" : "the share of its calls that failed"}. ` +
-        `${state.arrows === "count" ? "Arrows: times taken" : "Arrows: the chance a call follows the tool, P(next | tool), out of all its next calls, those hidden here included"}. Click a tool to follow its own use.`;
+        `${ARROWS[state.arrows]}. Click a tool to follow its own use.`;
     } else {
       graph = toolUseGraph(facet, state.tool, state.minEdge);
       caption.textContent =
         `The life of ${state.tool} within each session: the calls that named it (a search), then its own calls, ok or failed. ` +
         `An arrow from failed to ok is a recovery; failed to failed, a repeat. ` +
-        `${state.arrows === "count" ? "Arrows: times taken." : "Arrows: the chance of what comes next in the tool's life."}`;
+        `${state.arrows === "share" ? "Arrows: the chance of what comes next in the tool's life" : ARROWS[state.arrows]}.`;
     }
     if (!graph.edges.length) {
       canvas.replaceChildren(empty("No arrow is taken that often here."));
@@ -171,9 +188,9 @@ export function processMap(facet: Facet): HTMLElement {
     (value) => { state.colorBy = value as "calls" | "failure"; draw(); },
   );
   const arrowSwitch = segmented(
-    [["count", "Arrows by count"], ["share", "Arrows by probability"]],
+    [["count", "Arrows by count"], ["share", "Arrows by probability"], ["time", "Arrows by time"]],
     state.arrows,
-    (value) => { state.arrows = value as "count" | "share"; draw(); },
+    (value) => { state.arrows = value as Arrows; draw(); },
   );
   toolSelect.addEventListener("change", () => { state.tool = toolSelect.value; draw(); });
   keepInput.addEventListener("input", () => { state.keep = Number(keepInput.value); draw(); });

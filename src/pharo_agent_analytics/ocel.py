@@ -33,6 +33,8 @@ EVENT_ATTRIBUTES = {
     "test_outcome": "string",
     "test_count": "integer",
     "seq": "integer",
+    "host_duration_ms": "float",
+    "agent_ms": "float",
 }
 SQLITE_TYPES = {"string": "TEXT", "boolean": "INTEGER", "integer": "INTEGER", "float": "REAL", "time": "TEXT"}
 
