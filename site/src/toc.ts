@@ -56,7 +56,12 @@ export function buildToc(toc: HTMLElement, report: HTMLElement): void {
       links.length ? el("ul", {}, ...links) : null));
   }
   toc.replaceChildren(el("p", { class: "toc-title" }, "Contents"), el("ul", {}, ...items));
-  for (const link of toc.querySelectorAll("a")) link.addEventListener("click", closeToc);
+  for (const link of toc.querySelectorAll<HTMLAnchorElement>("a")) {
+    link.addEventListener("click", () => {
+      closeToc();
+      mark(toc, decodeURIComponent(link.hash.slice(1)));
+    });
+  }
 
   // The view nearest the top, among those crossing the upper part of the screen.
   spy?.disconnect();
@@ -68,9 +73,14 @@ export function buildToc(toc: HTMLElement, report: HTMLElement): void {
     }
     for (const target of visible.keys()) visible.set(target, target.getBoundingClientRect().top);
     // A view wins over its section: the section is the fallback between its views.
-    const nearest = [...visible.entries()].sort((a, b) =>
-      Number(a[0].tagName === "SECTION") - Number(b[0].tagName === "SECTION") || Math.abs(a[1]) - Math.abs(b[1]))[0];
-    if (nearest) mark(toc, nearest[0].id);
+    const ranked = [...visible.entries()].sort((a, b) =>
+      Number(a[0].tagName === "SECTION") - Number(b[0].tagName === "SECTION") || Math.abs(a[1]) - Math.abs(b[1]));
+    const nearest = ranked[0];
+    if (!nearest) return;
+    // Views side by side share their top: the one the address names, if any, else the first.
+    const named = decodeURIComponent(location.hash.slice(1));
+    const row = ranked.filter(([t, top]) => t.tagName === nearest[0].tagName && Math.abs(top - nearest[1]) < 8);
+    mark(toc, (row.find(([t]) => t.id === named) ?? nearest)[0].id);
   }, { rootMargin: `-${getComputedStyle(document.documentElement).getPropertyValue("--masthead-h").trim() || "140px"} 0px -55% 0px` });
   for (const target of targets) spy.observe(target);
 }
