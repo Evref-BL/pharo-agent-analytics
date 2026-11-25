@@ -20,10 +20,16 @@ export function section(id: string, title: string, lede: string): { root: HTMLEl
   return { root, body };
 }
 
-export function card(title: string, note?: string, wide = false): { root: HTMLElement; chart: HTMLElement } {
+/** A view of the report: `id` names it for the warnings the build writes and for the viewer's choice of views. */
+export function card(id: string, title: string, note?: string, wide = false): { root: HTMLElement; chart: HTMLElement } {
   const chart = el("div", { class: "chart" });
-  const root = el("div", { class: wide ? "card wide" : "card" }, el("h3", {}, title), note ? el("p", { class: "note" }, note) : null, chart);
+  const root = el("div", { class: wide ? "card wide" : "card", "data-view": id }, el("h3", {}, title), note ? el("p", { class: "note" }, note) : null, chart);
   return { root, chart };
+}
+
+/** Why a view is empty: these spans lack what it needs. The views panel offers to hide such views. */
+export function lacking(text: string): HTMLElement {
+  return el("p", { class: "empty lacking" }, text);
 }
 
 export function empty(text = "Nothing to show for these calls yet."): HTMLElement {

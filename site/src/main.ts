@@ -5,13 +5,14 @@ import {
 import { agentSection } from "./agent";
 import { markovSection } from "./markov";
 import { count, el } from "./ui";
+import { applyVisibility, applyWarnings, fillPanel } from "./views";
 
 const FILES = [
   "meta", "facets", "weekly", "tools", "dfg", "tool-use-dfg", "variants", "recovery", "recovery-curves", "schema",
   "unknown-arguments", "options", "discovery", "evaluate", "collocations", "tests", "green-curves", "latency", "output",
   "sessions", "failure-runs", "more-results", "next-entropy", "releases", "images", "published", "errors",
   "markov-order", "markov-memory", "markov-recovery", "phase-fits", "phases", "phase-transitions", "phase-places",
-  "time-split", "agent-time", "answer-time", "hours", "traces", "host", "tokens", "evaluate-words",
+  "time-split", "agent-time", "answer-time", "hours", "traces", "host", "tokens", "evaluate-words", "warnings",
 ];
 
 const FACET_LABELS: Record<string, string> = {
@@ -42,12 +43,17 @@ async function main() {
   }
 
   const report = document.getElementById("report")!;
+  const panel = document.getElementById("views-panel")!;
+  const summary = document.querySelector<HTMLElement>("#views > summary")!;
   let facet: Facet = { facet: "all", value: "all" };
   const render = () => {
     report.replaceChildren(
       overview(facet), tools(facet), process(facet), markovSection(facet), variants(facet), failures(facet),
       argumentsSection(facet), discovery(facet), tests(facet), timeAndSize(facet), agentSection(facet), releases(), method(),
     );
+    applyWarnings(report, facet);
+    fillPanel(panel, summary, report);
+    applyVisibility(report);
   };
   select.addEventListener("change", () => {
     const [kind, value] = select.value.split("|");

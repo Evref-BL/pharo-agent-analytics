@@ -26,6 +26,10 @@
   --seq-8: #1c5cab;
   --seq-ink: #0b0b0b;
   --critical: #d03b3b;
+  /* Status warning: fixed in both themes, always with its icon and label. */
+  --warning: #fab219;
+  --warning-ink: #0b0b0b;
+  --warning-wash: rgba(250, 178, 25, 0.12);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -209,6 +213,76 @@ details[open] > summary { margin-bottom: 8px; }
 .method li { margin-bottom: 4px; }
 
 .verdict { font-size: 0.9rem; color: var(--ink); margin: 0; }
+
+.warning {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--warning-wash);
+  border: 1px solid var(--ring);
+  border-left: 3px solid var(--warning);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.84rem;
+  color: var(--ink);
+}
+.warning p { max-width: 80ch; }
+.warning.banner { font-size: 0.9rem; padding: 10px 14px; }
+.warning-icon { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+.warning-shape { fill: var(--warning); stroke: var(--warning); stroke-width: 1.5; stroke-linejoin: round; }
+.warning-mark { stroke: var(--warning-ink); stroke-width: 1.6; stroke-linecap: round; fill: none; }
+
+.masthead-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; position: relative; }
+.views-menu > summary {
+  list-style: none;
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: var(--page);
+  border: 1px solid var(--axis);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.views-menu > summary::-webkit-details-marker { display: none; }
+.views-menu[open] > summary { margin-bottom: 0; background: var(--ink); color: var(--surface); }
+.views-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 6;
+  width: min(440px, calc(100vw - 32px));
+  max-height: 70vh;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--axis);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 0.85rem;
+}
+@media (max-width: 600px) { .views-panel { left: 0; right: auto; } }
+.views-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.views-actions button {
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--ink);
+  background: var(--page);
+  border: 1px solid var(--axis);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.views-actions button:disabled { color: var(--muted); cursor: default; }
+.views-panel fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.views-panel legend { font-weight: 600; color: var(--ink); padding: 0; margin-bottom: 4px; }
+.views-panel label { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; color: var(--ink-2); }
+.badge { display: inline-flex; gap: 4px; align-items: center; font-size: 0.72rem; border-radius: 4px; padding: 0 6px; border: 1px solid var(--ring); color: var(--ink-2); }
+.badge.few { background: var(--warning-wash); color: var(--ink); }
+.badge .warning-icon { width: 11px; height: 11px; margin: 0; }
 .phases { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .phase-row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
 .phase-chart { min-width: 0; max-width: 100%; overflow-x: auto; }

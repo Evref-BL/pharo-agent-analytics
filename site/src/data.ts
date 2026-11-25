@@ -23,6 +23,9 @@ export interface Meta {
   tokens: boolean;
   evaluateCode: boolean;
   customFacets: string[];
+  /** Below this many observations, a share's 95 % interval is wider than ±rough: the view warns. */
+  enough: number;
+  rough: number;
 }
 
 export interface Facet { facet: string; value: string }

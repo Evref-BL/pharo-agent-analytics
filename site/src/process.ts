@@ -199,5 +199,5 @@ export function processMap(facet: Facet): HTMLElement {
   const controls = el("div", { class: "controls" }, el("label", {}, "Object", objectSwitch), toolControl, keepControl,
     el("label", {}, "Arrows taken", edgeInput, edgeLabel), colorSwitch, arrowSwitch);
   draw();
-  return el("div", { class: "card wide" }, el("h3", {}, "Process map"), controls, caption, canvas);
+  return el("div", { class: "card wide", "data-view": "process-map" }, el("h3", {}, "Process map"), controls, caption, canvas);
 }

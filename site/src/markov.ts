@@ -29,7 +29,7 @@ export function markovSection(facet: Facet): HTMLElement {
 
 function order(facet: Facet): HTMLElement {
   const rows = of("markov-order", facet).sort((a, b) => a.order - b.order);
-  const view = card("How far back the next call looks",
+  const view = card("markov-order", "How far back the next call looks",
     "Chains that remember the last 0 to 3 calls, each judged four ways: the likelihood ratio of each order against the one below, AIC and BIC, which charge for every probability a chain estimates, and how well each predicts sessions it was not fitted on.");
   if (!rows.length) {
     view.chart.append(empty());
@@ -38,7 +38,7 @@ function order(facet: Facet): HTMLElement {
   const first = rows.find((r) => r.order === 1);
   const picks = verdict(rows, "order", (n) => (n === 0 ? "no memory" : `${n} call${n > 1 ? "s" : ""} back`));
   const support = first
-    ? `A chain of the last call estimates ${count(first.parameters)} probabilities from ${count(first.transitions)} transitions${first.parameters > first.transitions ? ": more than the calls can pin down, which is why the penalised criteria may want less memory than the others" : ""}.`
+    ? `A chain of the last call estimates ${count(first.parameters)} probabilities from ${count(first.transitions)} transitions.`
     : "";
   const heldout = rows.filter((r) => r.heldout_bits != null);
   view.chart.append(
@@ -75,7 +75,7 @@ function order(facet: Facet): HTMLElement {
 function memory(facet: Facet): HTMLElement {
   const k = meta().minSessions;
   const rows = of("markov-memory", facet).filter((r) => r.gain_bits > 0).slice(0, 15);
-  const view = card("Where the call before last matters",
+  const view = card("markov-memory", "Where the call before last matters",
     "Pairs of calls after which the next call differs most from what the last call alone predicts, ranked by the information the earlier call adds over the times the pair occurred." +
       (k > 1 ? ` Pairs shared by fewer than ${k} sessions are not shown.` : ""));
   view.chart.append(rows.length ? table(rows, [
@@ -93,7 +93,7 @@ function memory(facet: Facet): HTMLElement {
 
 function phases(facet: Facet): HTMLElement {
   const fits = of("phase-fits", facet).sort((a, b) => a.phases - b.phases);
-  const view = card("Phases of a session",
+  const view = card("phases", "Phases of a session",
     "A hidden Markov model: each call comes from a phase the spans do not name, phases follow one another as a chain, and each phase calls tools of its own. Phases are numbered by when they come in a session.",
     true);
   const counts = fits.map((f) => f.phases).filter((n) => n >= 2);
@@ -104,12 +104,10 @@ function phases(facet: Facet): HTMLElement {
   const pick = (name: string) => fits.find((f) => f.chosen_by?.includes(name))?.phases as number | undefined;
   const preferred = [pick("held-out sessions"), pick("BIC")].find((n) => n != null && n >= 2) ?? 2;
   const picks = verdict(fits, "phases", (n) => `${n} phase${n > 1 ? "s" : ""}`);
-  const none = fits.every((f) => !f.chosen_by?.length || f.phases === 1);
   const holder = el("div", { class: "phases" });
   const draw = (k: number) => holder.replaceChildren(...phaseViews(facet, k));
   view.chart.append(
     el("p", { class: "verdict" }, picks),
-    none ? el("p", { class: "note" }, "Every criterion prefers a single phase: these calls show no phases yet, and the views below show what the phases would be.") : "",
     el("div", { class: "controls" }, el("label", {}, "Phases", segmented(counts.map((n) => [String(n), String(n)]), String(preferred), (v) => draw(Number(v))))),
     holder,
     tableView(fits, [
@@ -183,7 +181,7 @@ function phaseViews(facet: Facet, k: number): Node[] {
 export function chainRecovery(facet: Facet): HTMLElement {
   const rows = of("markov-recovery", facet).filter((r) => r.failures > 0).sort((a, b) => b.failures - a.failures).slice(0, 15)
     .map((r): Row => ({ ...r, observed: r.recovered / r.failures, ...wilson(r.recovered, r.failures) }));
-  const view = card("What the chain expects after a failure",
+  const view = card("markov-recovery", "What the chain expects after a failure",
     "The first-order chain over each tool, worked or failed, from every transition of these sessions: from a failed call, the chance the tool works before the session ends (dot), beside the share of failures whose tool did work later (ring, with its 95 % interval). Far apart, what the agent does next depends on more than its last call. When the spans keep each call's place in its session, the chain also says how long until the tool works, from each state's mean time (a semi-Markov chain), beside the observed median.");
   if (!rows.length) {
     view.chart.append(empty("No call failed."));

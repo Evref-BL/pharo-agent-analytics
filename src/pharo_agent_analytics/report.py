@@ -19,7 +19,7 @@ from typing import Any
 
 import duckdb
 
-from . import content, markov
+from . import content, markov, sufficiency
 from .store import sql
 
 #: Tables whose rows tell a sequence or a word, and so need `min_sessions` sessions.
@@ -294,8 +294,12 @@ def write(connection: duckdb.DuckDBPyConnection, out: Path, min_sessions: int = 
         "evaluateCode": bool(connection.execute(
             "SELECT count(*) > 0 FROM steps WHERE tool = 'evaluate' AND content_arguments IS NOT NULL").fetchone()[0]),
         "customFacets": [k for (k,) in connection.execute("SELECT key FROM custom_facets").fetchall()],
+        # A share of fewer observations than this is known to worse than ±ROUGH: the views warn.
+        "enough": sufficiency.ENOUGH,
+        "rough": sufficiency.ROUGH,
     }
     files["meta"] = meta
+    files["warnings"] = sufficiency.warnings(files, meta)
     for file, data in files.items():
         (out / f"{file}.json").write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
     return meta

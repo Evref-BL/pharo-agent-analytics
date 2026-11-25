@@ -107,8 +107,7 @@ per session and facet:
 
 Every model runs on whatever calls there are. When the penalised criteria
 choose less memory or fewer phases than the others, the calls are too few to
-estimate more, and the report says so beside the model rather than leaving it
-out.
+estimate more, and the view warns rather than being left out (see Few data).
 
 ## What each view needs
 
@@ -123,6 +122,28 @@ out.
 A view that lacks what it needs says so, and the report's Method lists what
 these spans could not give. The event log gains the trace, the agent and the
 model as objects when the spans hold them.
+
+## Few data
+
+`sufficiency.py` writes `warnings.json`: per facet, the views whose calls are
+too few for what they show, and why. A view warns when:
+
+- its shares rest on fewer observations than give a 95 % Wilson interval of
+  ±15 points at one half (39): the sessions of a facet, the failed calls
+  behind what follows a failure, the sessions that compiled a method, the
+  failures of each tool the chain judges, the sessions of a release compared
+  with another of its component;
+- the criteria choosing a model disagree: AIC and BIC choose less memory than
+  held-out sessions or the likelihood ratio, or BIC and held-out sessions
+  choose different numbers of phases, or every criterion one phase;
+- no criterion finds memory beyond the last call, on the pairs after which
+  the next call changes;
+- most sessions follow a sequence no other session shares, on the most
+  common sessions.
+
+The report shows each warning on its view, and the facet's own above the
+report. Its Views menu hides views, those with few data or none among them;
+the choice stays in the reader's browser.
 
 ## Thresholds
 

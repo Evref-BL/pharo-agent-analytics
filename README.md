@@ -79,7 +79,9 @@ Export everything the tools and the agent host send to the same place:
 - `build --facet ATTRIBUTE` adds a facet for any resource attribute, such as
   a team set in `OTEL_RESOURCE_ATTRIBUTES`.
 
-Each view that needs one of these says so when the spans lack it.
+Each view that needs one of these says so when the spans lack it, and each
+view whose calls are too few for what it shows carries a warning; the
+report's Views menu hides the views a reader does not want.
 
 ## Filtered spans
 

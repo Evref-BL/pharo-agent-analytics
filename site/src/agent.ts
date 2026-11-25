@@ -10,16 +10,12 @@ import * as Plot from "@observablehq/plot";
 import * as d3 from "d3";
 import { all, meta, of, type Facet, type Row } from "./data";
 import {
-  card, chart, count, duration, el, empty, legend, percent, section, segmented, sequential, table, tableView, tile, token,
+  card, chart, count, duration, el, empty, lacking, legend, percent, section, segmented, sequential, table, tableView, tile, token,
 } from "./ui";
 
 const WIDTH = 520;
 const TOGETHER_MS = 100;
 
-/** Why a view is empty: these spans lack what it needs. */
-function lacking(text: string): HTMLElement {
-  return el("p", { class: "empty" }, text);
-}
 
 const NO_SESSION_TIME = "These spans keep no time within a session, so the agent's time cannot be told from the tools'.";
 const NO_REAL_TIME = "A filter kept only the week of each span: the hour of the day is gone.";
@@ -38,7 +34,7 @@ export function agentSection(facet: Facet): HTMLElement {
 // ------------------------------------------------------------- time split
 
 function timeSplit(facet: Facet): HTMLElement {
-  const view = card("The tool's time and the agent's",
+  const view = card("time-split", "The tool's time and the agent's",
     `For each tool, the median time its calls took (tool) and the median time the agent took after the answer before its next call (agent), on a log scale. ` +
     `Calls whose next one started within ${TOGETHER_MS} ms were asked together, in one answer of the model, and calls whose next one started before they ended overlapped: both are counted apart, not in the agent's time.`, true);
   if (!meta().sessionTime) {
@@ -87,7 +83,7 @@ function timeSplit(facet: Facet): HTMLElement {
 // ------------------------------------------------------ agent time spread
 
 function agentTime(facet: Facet): HTMLElement {
-  const view = card("How long the agent takes between calls",
+  const view = card("agent-time", "How long the agent takes between calls",
     `From the end of a call to the start of the next, in powers of two of milliseconds. Below about ${TOGETHER_MS} ms, the two calls came from one answer of the model; before zero, the next call started while this one ran (parallel calls, or subagents sharing the session).`);
   if (!meta().sessionTime) {
     view.chart.append(lacking(NO_SESSION_TIME));
@@ -129,7 +125,7 @@ function agentTime(facet: Facet): HTMLElement {
 // ------------------------------------------------ answer size, then time
 
 function answerTime(facet: Facet): HTMLElement {
-  const view = card("Bigger answers, longer reads?",
+  const view = card("answer-time", "Bigger answers, longer reads?",
     `The agent's time after an answer, by the answer's size in powers of two of bytes: the median (dot) and the 90th percentile (end of the line). Answers asked together with the next call are left out: nobody read them first.`);
   if (!meta().sessionTime) {
     view.chart.append(lacking(NO_SESSION_TIME));
@@ -169,7 +165,7 @@ function answerTime(facet: Facet): HTMLElement {
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function hours(facet: Facet): HTMLElement {
-  const view = card("When the tools are used", "Calls by weekday and hour, in UTC as the spans keep time; the darker, the more calls.", true);
+  const view = card("hours", "When the tools are used", "Calls by weekday and hour, in UTC as the spans keep time; the darker, the more calls.", true);
   if (!meta().timePrecise) {
     view.chart.append(lacking(NO_REAL_TIME));
     return view.root;
@@ -201,7 +197,7 @@ function hours(facet: Facet): HTMLElement {
 // ----------------------------------------------------------------- traces
 
 function traces(facet: Facet): HTMLElement {
-  const view = card("The host's turns",
+  const view = card("traces", "The host's turns",
     "When the agent host passes its trace context with a call, the calls one of its traces holds: a turn or a task, as the host draws its traces. How many calls a turn takes, and whether the turns that met a failure ended on a call that worked.");
   if (!meta().callerContext) {
     view.chart.append(lacking(NO_CALLER));
@@ -244,7 +240,7 @@ function traces(facet: Facet): HTMLElement {
 // ------------------------------------------------------------------- host
 
 function host(facet: Facet): HTMLElement {
-  const view = card("What the host adds",
+  const view = card("host", "What the host adds",
     "The agent host's own time for a call, from its execute_tool span, less the tool's: the transport and whatever the host does around the call. The median (dot) and the 90th percentile (end of the line), per tool.");
   if (!meta().hostSpans) {
     view.chart.append(lacking(NO_HOST));
@@ -283,7 +279,7 @@ function host(facet: Facet): HTMLElement {
 // ----------------------------------------------------------------- tokens
 
 function tokens(facet: Facet): HTMLElement {
-  const view = card("What the model spent",
+  const view = card("tokens", "What the model spent",
     "Tokens of the agent host's model calls in the traces that hold these tool calls, per session, beside the tool calls made; and the same by model.");
   if (!meta().tokens) {
     view.chart.append(lacking(NO_TOKENS));
@@ -318,7 +314,7 @@ function tokens(facet: Facet): HTMLElement {
 
 /** The classes and messages of the code agents asked evaluate to run: what a tool could do for them instead. */
 export function evaluateWords(facet: Facet): HTMLElement {
-  const view = card("What evaluate is asked to do",
+  const view = card("evaluate-words", "What evaluate is asked to do",
     "The classes the code names and the messages it sends, by the evaluate calls that used them, and how many of those came right after a failed call. Words only: the code itself is never shown.");
   if (!meta().evaluateCode) {
     view.chart.append(lacking(NO_CODE));

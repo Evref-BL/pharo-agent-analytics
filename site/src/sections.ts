@@ -46,7 +46,7 @@ export function overview(facet: Facet): HTMLElement {
   );
   body.append(tiles);
 
-  const volume = card(`Calls per ${unit}`, m.timePrecise ? "By the time each call started." : "A filter kept only the week each span started in.");
+  const volume = card("weekly-calls", `Calls per ${unit}`, m.timePrecise ? "By the time each call started." : "A filter kept only the week each span started in.");
   volume.chart.append(
     weekly.length
       ? chart({
@@ -61,7 +61,7 @@ export function overview(facet: Facet): HTMLElement {
       : empty(),
     tableView(weekly, [{ key: "week", label: unit === "day" ? "Day" : "Week" }, { key: "calls", label: "Calls", numeric: true }, { key: "sessions", label: "Sessions", numeric: true }, { key: "failed", label: "Failed calls", numeric: true }]),
   );
-  const failure = card("Sessions that met a failure", `Share of the ${unit}'s sessions with at least one failed call, with its 95 % interval.`);
+  const failure = card("weekly-failure", "Sessions that met a failure", `Share of the ${unit}'s sessions with at least one failed call, with its 95 % interval.`);
   const rates = weekly.map((w) => ({ ...w, rate: w.sessions_with_failure / w.sessions, ...wilson(w.sessions_with_failure, w.sessions) }));
   failure.chart.append(
     rates.length
@@ -97,7 +97,7 @@ export function tools(facet: Facet): HTMLElement {
     n, low: Math.max(0, p0 - 1.96 * Math.sqrt((p0 * (1 - p0)) / n)), high: Math.min(1, p0 + 1.96 * Math.sqrt((p0 * (1 - p0)) / n)),
   }));
   const points = rows.map((r) => ({ ...r, rate: r.sessions_failed / r.sessions, outside: r.sessions_failed / r.sessions > p0 + 1.96 * Math.sqrt((p0 * (1 - p0)) / r.sessions) }));
-  const funnel = card("Failure against use", "Each dot is a tool: the sessions that used it, and the share of them in which it failed. Inside the funnel, the difference from the average is what chance alone would give; a labelled dot is above it.");
+  const funnel = card("tools", "Failure against use", "Each dot is a tool: the sessions that used it, and the share of them in which it failed. Inside the funnel, the difference from the average is what chance alone would give; a labelled dot is above it.");
   funnel.chart.append(
     chart({
       width: WIDTH, height: 300,
@@ -122,7 +122,7 @@ export function tools(facet: Facet): HTMLElement {
       ["exception", r.exception], ["refused by PLexus", r.refused_by_plexus], ["other", (r.json_rpc ?? 0) + (r.other_failure ?? 0)],
     ] as [string, number][]).filter(([, n]) => n > 0).map(([kind, n]) => ({ tool: r.tool, kind, n })),
   );
-  const how = card("How tools fail", "Failed calls of the 15 tools that fail most, by the kind of error. Input schema: the arguments broke the tool's schema; domain: the tool refused what was asked; tool result: the tool answered with an error.");
+  const how = card("tool-errors", "How tools fail", "Failed calls of the 15 tools that fail most, by the kind of error. Input schema: the arguments broke the tool's schema; domain: the tool refused what was asked; tool result: the tool answered with an error.");
   how.chart.append(
     kinds.length
       ? chart({
@@ -142,7 +142,7 @@ export function tools(facet: Facet): HTMLElement {
   const published = all("published");
   const used = new Set(rows.map((r) => r.tool));
   const unused = published.filter((p) => !used.has(p.tool));
-  const inventory = card("Every tool", unused.length
+  const inventory = card("tool-inventory", "Every tool", unused.length
     ? `Published but never called here: ${unused.map((u) => u.tool).join(", ")}.`
     : "Click a column to sort.", true);
   inventory.chart.append(table(rows.sort((a, b) => b.calls - a.calls), [
@@ -159,7 +159,7 @@ export function tools(facet: Facet): HTMLElement {
     { key: "unknown_arguments", label: "Unknown args", numeric: true, format: count },
   ]));
   const errors = of("errors", facet).sort((a, b) => b.calls - a.calls);
-  const words = card("Failures in their own words", errors.some((e) => e.code || e.message || e.exception_type)
+  const words = card("errors", "Failures in their own words", errors.some((e) => e.code || e.message || e.exception_type)
     ? "The error code, the exception's class and the message the client was answered with, numbers and quoted parts blanked so that one message is one row."
     : "These spans carry no error code, class or message: whatever exported them left them out.", true);
   words.chart.append(errors.length ? table(errors, [
@@ -182,7 +182,7 @@ export function process(facet: Facet): HTMLElement {
     "The calls as an object-centric event log: each session's sequence of calls, and each tool's life within a session.");
   body.append(processMap(facet));
   const entropy = of("next-entropy", facet).filter((r) => r.calls >= 5).sort((a, b) => b.entropy_bits - a.entropy_bits);
-  const next = card("How predictable the next call is", "Entropy, in bits, of the call that follows each tool (tools called at least five times). Low: one move usually follows; high: the agent goes many ways from here.");
+  const next = card("next-entropy", "How predictable the next call is", "Entropy, in bits, of the call that follows each tool (tools called at least five times). Low: one move usually follows; high: the agent goes many ways from here.");
   next.chart.append(
     entropy.length
       ? chart({
@@ -197,7 +197,7 @@ export function process(facet: Facet): HTMLElement {
       : empty(),
   );
   const collocations = of("collocations", facet).filter((r) => r.count >= 3).sort((a, b) => b.lift - a.lift);
-  const pairs = card("Pairs that go together", "Calls that follow each other more often than their frequencies alone would make them (lift above 1): candidates for a fused tool or a richer answer.");
+  const pairs = card("collocations", "Pairs that go together", "Calls that follow each other more often than their frequencies alone would make them (lift above 1): candidates for a fused tool or a richer answer.");
   pairs.chart.append(collocations.length ? table(collocations, [
     { key: "first", label: "First" },
     { key: "second", label: "Then" },
@@ -218,7 +218,7 @@ export function variants(facet: Facet): HTMLElement {
   const rows = of("variants", facet).sort((a, b) => b.sessions - a.sessions);
   const total = d3.sum(rows, (r) => r.sessions);
   const max = d3.max(rows, (r) => r.sessions) ?? 1;
-  const list = card("Most common sessions", `The sequences most sessions share.${meta().minSessions > 1 ? ` Those shared by fewer than ${meta().minSessions} sessions are counted together, never shown.` : ""}`, true);
+  const list = card("variants", "Most common sessions", `The sequences most sessions share.${meta().minSessions > 1 ? ` Those shared by fewer than ${meta().minSessions} sessions are counted together, never shown.` : ""}`, true);
   let covered = 0;
   list.chart.append(
     rows.length
@@ -240,7 +240,7 @@ export function variants(facet: Facet): HTMLElement {
     cell.replaceChildren(el("div", { class: "variant" }, r.variant), bar);
   });
   const lengths = of("sessions", facet);
-  const shape = card("How long sessions are", "Calls per session. Sessions end after 30 minutes without a call, so a long conversation can be several.");
+  const shape = card("session-length", "How long sessions are", "Calls per session. Sessions end after 30 minutes without a call, so a long conversation can be several.");
   shape.chart.append(
     lengths.length
       ? chart({
@@ -266,7 +266,7 @@ export function failures(facet: Facet): HTMLElement {
   const { root, body } = section("failures", "After a failure",
     "What an agent did right after a failed call, and whether the tool worked for it later in the session.");
   const rows = of("recovery", facet).map((r) => ({ ...r, kind: errorKind(r.error_kind) }));
-  const flow = card("From failure to outcome", "Failed calls, by the kind of error, then what the agent did next, then whether the same tool worked later in that session. Hover a band for its count.", true);
+  const flow = card("recovery", "From failure to outcome", "Failed calls, by the kind of error, then what the agent did next, then whether the same tool worked later in that session. Hover a band for its count.", true);
   flow.chart.append(rows.length ? alluvial(rows) : empty("No call failed."), legend(ERROR_KINDS.map((k) => [ERROR_LABELS[k], errorColor(k)])));
   flow.chart.append(tableView(rows, [
     { key: "error_kind", label: "Error" }, { key: "next_action", label: "Next" }, { key: "outcome", label: "Outcome" },
@@ -276,7 +276,7 @@ export function failures(facet: Facet): HTMLElement {
 
   const curves = of("recovery-curves", facet);
   const groups = ["all", ...ERROR_KINDS.filter((k) => curves.some((c) => c.group === k))];
-  const incidence = card("Calls until the tool works", "After a failure, the share of failures whose tool has worked again (blue), and of those whose session ended first (orange), as calls go by. The two compete: counting ended sessions as censored would overstate recovery.");
+  const incidence = card("recovery-curves", "Calls until the tool works", "After a failure, the share of failures whose tool has worked again (blue), and of those whose session ended first (orange), as calls go by. The two compete: counting ended sessions as censored would overstate recovery.");
   const holder = el("div");
   const drawCurves = (group: string) => {
     const data = curves.filter((c) => c.group === group && c.calls <= 30);
@@ -305,7 +305,7 @@ export function failures(facet: Facet): HTMLElement {
   drawCurves("all");
 
   const runs = of("failure-runs", facet);
-  const repeats = card("Failing again and again", "Runs of the same tool failing call after call: how long they last and how they end. A long run is the agent repeating what does not work.");
+  const repeats = card("failure-runs", "Failing again and again", "Runs of the same tool failing call after call: how long they last and how they end. A long run is the agent repeating what does not work.");
   const runRows = Array.from(d3.rollup(runs, (v) => d3.sum(v, (r) => r.runs), (r) => Math.min(r.length, 6), (r) => r.ending), ([length, endings]) =>
     Array.from(endings, ([ending, n]) => ({ length: length >= 6 ? "6+" : String(length), ending, n }))).flat();
   repeats.chart.append(
@@ -394,7 +394,7 @@ export function argumentsSection(facet: Facet): HTMLElement {
   const schema = of("schema", facet);
   const cells = Array.from(d3.rollup(schema, (v) => ({ calls: d3.sum(v, (r) => r.calls), sessions: d3.max(v, (r) => r.sessions), keywords: [...new Set(v.map((r) => r.keyword))].join(", ") }), (r) => r.tool, (r) => r.path),
     ([tool, paths]) => Array.from(paths, ([path, value]) => ({ tool, path, ...value }))).flat();
-  const heat = card("Where the schema breaks", `Calls refused for their arguments, by tool and by the place in its input they broke; the rule broken shows on hover. ${hidden("Cells")}`, true);
+  const heat = card("schema", "Where the schema breaks", `Calls refused for their arguments, by tool and by the place in its input they broke; the rule broken shows on hover. ${hidden("Cells")}`, true);
   const toolsOrder = d3.groupSort(cells, (v) => -d3.sum(v, (d) => d.calls), (d) => d.tool);
   const pathsOrder = d3.groupSort(cells, (v) => -d3.sum(v, (d) => d.calls), (d) => d.path);
   heat.chart.append(
@@ -412,14 +412,14 @@ export function argumentsSection(facet: Facet): HTMLElement {
       : empty("No call broke a tool's schema."),
   );
   const unknown = of("unknown-arguments", facet).sort((a, b) => b.calls - a.calls);
-  const words = card("Names agents expect", "Argument names calls gave that the tool does not take: a name many agents reach for is a candidate variant to accept, while the description keeps the canonical one.");
+  const words = card("unknown-arguments", "Names agents expect", "Argument names calls gave that the tool does not take: a name many agents reach for is a candidate variant to accept, while the description keeps the canonical one.");
   words.chart.append(unknown.length ? table(unknown, [
     { key: "tool", label: "Tool" }, { key: "name", label: "Name given" },
     { key: "calls", label: "Calls", numeric: true, format: count }, { key: "sessions", label: "Sessions", numeric: true, format: count },
     { key: "failed", label: "Failed", numeric: true, format: count },
   ]) : empty("No call gave a name its tool lacks."));
   const options = of("options", facet).sort((a, b) => b.calls - a.calls);
-  const used = card("Options in use", "The options calls chose: a property given, a value of an enumeration, or a list for several targets. An option missing here is one nobody uses.");
+  const used = card("options", "Options in use", "The options calls chose: a property given, a value of an enumeration, or a list for several targets. An option missing here is one nobody uses.");
   used.chart.append(options.length ? table(options, [
     { key: "tool", label: "Tool" }, { key: "option", label: "Option" },
     { key: "calls", label: "Calls", numeric: true, format: count }, { key: "sessions", label: "Sessions", numeric: true, format: count },
@@ -435,7 +435,7 @@ export function discovery(facet: Facet): HTMLElement {
   const { root, body } = section("discovery", "Discovery and fallbacks",
     "Whether searching for a tool leads to calling it, what agents do when a search has more, and what precedes evaluate.");
   const rows = of("discovery", facet);
-  const funnelCard = card("From search to call", "Discovery calls, those that found something, and those followed within five calls by a call of a tool they named.");
+  const funnelCard = card("discovery", "From search to call", "Discovery calls, those that found something, and those followed within five calls by a call of a tool they named.");
   const searches = d3.sum(rows, (r) => r.calls);
   const found = d3.sum(rows.filter((r) => r.found !== "nothing" && r.found !== "not counted"), (r) => r.calls);
   const followed = d3.sum(rows.filter((r) => r.followed), (r) => r.calls);
@@ -461,7 +461,7 @@ export function discovery(facet: Facet): HTMLElement {
   const before = Array.from(d3.rollup(evaluate, (v) => d3.sum(v, (r) => r.calls), (r) => r.before, (r) => (r.before_failed ? "after it failed" : "after it worked")),
     ([tool, outcome]) => Array.from(outcome, ([after, n]) => ({ tool, after, n }))).flat();
   const order = d3.groupSort(before, (v) => -d3.sum(v, (d) => d.n), (d) => d.tool).slice(0, 15);
-  const fallback = card("What comes before evaluate", "The call just before each evaluate, and whether it had failed: evaluate after a failure is a fallback, a sign a tool did not serve.");
+  const fallback = card("evaluate", "What comes before evaluate", "The call just before each evaluate, and whether it had failed: evaluate after a failure is a fallback, a sign a tool did not serve.");
   fallback.chart.append(
     before.length
       ? chart({
@@ -478,7 +478,7 @@ export function discovery(facet: Facet): HTMLElement {
     legend([["after it worked", token("--series-1")], ["after it failed", token("--series-2")]]),
   );
   const more = of("more-results", facet);
-  const moreCard = card("When there were more results", "Answers that said more existed than they gave, and the agent's next move.");
+  const moreCard = card("more-results", "When there were more results", "Answers that said more existed than they gave, and the agent's next move.");
   moreCard.chart.append(more.length ? table(more, [
     { key: "tool", label: "Tool" }, { key: "next_action", label: "Then" },
     { key: "calls", label: "Calls", numeric: true, format: count }, { key: "sessions", label: "Sessions", numeric: true, format: count },
@@ -492,7 +492,7 @@ export function discovery(facet: Facet): HTMLElement {
 export function tests(facet: Facet): HTMLElement {
   const { root, body } = section("tests", "Tests", "The field's nearest thing to a verifier: how test runs end, and how an edit gets to passing tests.");
   const rows = of("tests", facet);
-  const matrix = card("One test run to the next", "How each test run ended, by how the session's previous run had ended (▶: the session's first).");
+  const matrix = card("tests", "One test run to the next", "How each test run ended, by how the session's previous run had ended (▶: the session's first).");
   const outcomes = ["▶", "passed", "failed", "errored", "none"];
   matrix.chart.append(
     rows.length
@@ -509,7 +509,7 @@ export function tests(facet: Facet): HTMLElement {
       : empty("No test run."),
   );
   const green = of("green-curves", facet).filter((r) => r.calls <= 40);
-  const toGreen = card("From a compile to passing tests", "Sessions that compiled a method: the share whose tests passed after it (blue), and of those that ended first (orange), as calls go by.");
+  const toGreen = card("green-curves", "From a compile to passing tests", "Sessions that compiled a method: the share whose tests passed after it (blue), and of those that ended first (orange), as calls go by.");
   const long = green.flatMap((d) => [{ calls: d.calls, share: d.reached, outcome: "tests passed" }, { calls: d.calls, share: d.ended, outcome: "session ended first" }]);
   toGreen.chart.append(
     long.length
@@ -538,7 +538,7 @@ export function timeAndSize(facet: Facet): HTMLElement {
   const latency = of("latency", facet);
   const order = d3.groupSort(latency, (v) => -d3.sum(v, (d) => d.calls), (d) => d.tool).slice(0, 20);
   const bins = [...new Set(latency.map((d) => d.bin_ms as number))].sort((a, b) => a - b);
-  const time = card("Time per tool", "Calls by how long they took, in powers of two of milliseconds; the darker, the more calls.", true);
+  const time = card("latency", "Time per tool", "Calls by how long they took, in powers of two of milliseconds; the darker, the more calls.", true);
   const label = (ms: number) => (ms >= 1000 ? `${ms / 1000 >= 10 ? Math.round(ms / 1000) : (ms / 1000).toFixed(1)} s` : `${ms} ms`);
   time.chart.append(
     latency.length
@@ -554,7 +554,7 @@ export function timeAndSize(facet: Facet): HTMLElement {
   const output = of("output", facet);
   const sizes = Array.from(d3.rollup(output, (v) => ({ calls: d3.sum(v, (r) => r.calls), cut: d3.sum(v, (r) => r.cut), median: d3.quantile(v.flatMap((r) => Array(r.calls).fill(r.output_bytes)), 0.5) ?? 0, p90: d3.quantile(v.flatMap((r) => Array(r.calls).fill(r.output_bytes)).sort(d3.ascending), 0.9) ?? 0 }), (r) => r.tool),
     ([tool, v]) => ({ tool, ...v })).sort((a, b) => b.p90 - a.p90).slice(0, 20);
-  const size = card("Answer sizes", "The median and 90th percentile of each tool's answer, in bytes (sizes are kept in powers of two), and how many answers were cut to fit the output budget.");
+  const size = card("output", "Answer sizes", "The median and 90th percentile of each tool's answer, in bytes (sizes are kept in powers of two), and how many answers were cut to fit the output budget.");
   size.chart.append(
     sizes.length
       ? chart({
@@ -571,7 +571,7 @@ export function timeAndSize(facet: Facet): HTMLElement {
     legend([["median (filled)", token("--series-1")], ["90th percentile (ring)", token("--series-1")]]),
   );
   const images = all("images");
-  const lifecycle = card("Images", "What PLexus did to images for agents, from its own spans: how often, how it ended, how long it took.");
+  const lifecycle = card("images", "Images", "What PLexus did to images for agents, from its own spans: how often, how it ended, how long it took.");
   lifecycle.chart.append(images.length ? table(images, [
     { key: "operation", label: "Operation" }, { key: "status", label: "Status" }, { key: "error_type", label: "Error" },
     { key: "spans", label: "Times", numeric: true, format: count }, { key: "sessions", label: "Sessions", numeric: true, format: count },
@@ -613,7 +613,7 @@ export function releases(): HTMLElement {
     );
   };
   const control = segmented([["MCP", "MCP"], ["PLexus", "PLexus"]], "MCP", draw);
-  const wide = el("div", { class: "card wide" }, el("h3", {}, "Release against release"), el("div", { class: "controls" }, control), holder,
+  const wide = el("div", { class: "card wide", "data-view": "releases" }, el("h3", {}, "Release against release"), el("div", { class: "controls" }, control), holder,
     tableView(rows, [
       { key: "component", label: "Component" }, { key: "release", label: "Release" }, { key: "tool", label: "Tool" },
       { key: "sessions", label: "Sessions", numeric: true }, { key: "sessions_failed", label: "Failed", numeric: true },
@@ -633,7 +633,7 @@ export function method(): HTMLElement {
   const m = meta();
   const { root, body } = section("method", "Method", "What these numbers are, and what they cannot say.");
   body.append(
-    el("div", { class: "method card wide" },
+    el("div", { class: "method card wide", "data-view": "method" },
       el("p", {}, `Built ${m.generated.slice(0, 10)} from ${count(m.spans)} spans of MCP and PLexus: ${count(m.calls)} calls in ${count(m.sessions)} sessions, from ${m.first} to ${m.last}.`),
       el("h3", {}, "Calls and sessions"),
       el("ul", {},
@@ -665,6 +665,8 @@ export function method(): HTMLElement {
         el("li", {}, m.content
           ? "Some spans carry the calls' arguments and answers (content capture was on): the report compares a repeated call's arguments and names the classes and messages of evaluate's code, but shows no value, answer or code."
           : "The spans hold no argument value or answer (content capture was off) and no prompt: the report says where agents struggle, never why.")),
+      el("h3", {}, "Few data"),
+      el("p", {}, `A view warns when the calls are too few for what it shows: when its shares rest on fewer than ${m.enough ?? 39} calls or sessions, so their 95 % interval is wider than ±${Math.round(100 * (m.rough ?? 0.15))} points, or when the criteria that choose a model disagree, AIC and BIC choosing less memory or fewer phases than held-out sessions. The Views menu hides views, those with few data among them.`),
       el("h3", {}, "What these spans could not give"),
       ((missing) => missing.length
         ? el("ul", {}, ...missing.map((text) => el("li", {}, text)))
