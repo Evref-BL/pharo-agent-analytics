@@ -99,6 +99,21 @@ def test_a_refused_argument_is_a_failed_call(connection):
     assert connection.execute("SELECT list(failed ORDER BY seq) FROM calls WHERE session_id = 'a'").fetchone()[0] == [False, True, False]
 
 
+def test_a_call_the_image_refused_as_the_callers_fault_says_its_code():
+    # The image's span has no error.type for -32602, as the conventions ask of a server; PLexus's client span
+    # has it, and PLexus answered the agent with a tool result.
+    connection = store.connect(":memory:")
+    server, server_id = span("@evref-bl/plexus", "server", "clas_get", "t9", "z", 0, status="error",
+                             **{"plexus.call.forwarded": True, "error.type": "tool_error"})
+    client, client_id = span("@evref-bl/plexus", "client", "clas_get", "t9", "z", 0, parent=server_id, status="error",
+                             **{"error.type": "-32602", "rpc.status_code": "-32602"})
+    image, _ = span("mcp-pharo", "server", "clas_get", "t9", "z", 1, parent=client_id,
+                    **{"pharo.mcp.tool.origin": "unknown", "pharo.mcp.error.kind": "json_rpc", "rpc.status_code": "-32602"})
+    assert store.load_documents(connection, [server, client, image]) == 3
+    store.build_model(connection)
+    assert connection.execute("SELECT error_type, rpc_status_code, failed FROM calls").fetchone() == ("-32602", "-32602", True)
+
+
 def test_a_dispatched_call_is_its_own_and_marked(connection):
     rows = connection.execute("SELECT tool, entry, dispatched FROM calls WHERE session_id = 'c' ORDER BY seq").fetchall()
     assert rows == [("tool_call", "image", False), ("evaluate", "dispatch", True)]

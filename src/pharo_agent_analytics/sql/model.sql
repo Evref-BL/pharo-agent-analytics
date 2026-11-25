@@ -58,7 +58,10 @@ SELECT
     coalesce(im.status_message, px.status_message)     AS status_message,
     px.status                                          AS plexus_status,
     im.status                                          AS image_status,
-    coalesce(im.error_type, px.error_type)             AS error_type,
+    -- How the call failed, from the image if it says, else from what PLexus received from it (a request
+    -- the image refused as the caller's fault leaves its own span without error.type), else what PLexus
+    -- answered.
+    coalesce(im.error_type, pc.error_type, px.error_type) AS error_type,
     coalesce(im.rpc_status_code, pc.rpc_status_code, px.rpc_status_code) AS rpc_status_code,
     im.error_kind,
     im.error_code,
