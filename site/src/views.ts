@@ -74,22 +74,26 @@ document.addEventListener("click", closeSigns);
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeSigns(); });
 
 /** Put the build's warnings for this facet on the views they concern: the
- * facet's own above the report, each view's in a note under its title, and a
- * sign in the corner of every view a warning concerns. */
+ * facet's own above the report, and on each view one mark only. A view's own
+ * warning is a note under its title; a view the facet's warning concerns, and
+ * no warning of its own, gets a sign in its corner, whose details are the note
+ * above the report. */
 export function applyWarnings(report: HTMLElement, facet: Facet): void {
-  for (const row of of("warnings", facet)) {
+  const rows = of("warnings", facet);
+  const noted = new Set(rows.filter((r) => r.shown !== "sign").map((r) => r.view));
+  for (const row of rows) {
     if (row.view === "report") {
       report.prepend(warning(row.message, true));
       continue;
     }
     const view = report.querySelector<HTMLElement>(`[data-view="${CSS.escape(row.view)}"]`);
     if (!view) continue;
-    if (row.shown === "sign") {
-      sign(view, `${row.message} The note above the report says so for every view.`);
-    } else {
+    if (row.shown !== "sign") {
       const anchor = view.querySelector(":scope > p.note") ?? view.querySelector(":scope > h3");
       anchor?.after(warning(row.message));
-      sign(view, "The note under the title says what these calls are too few for.");
+    } else if (!noted.has(row.view)) {
+      sign(view, `${row.message} The note above the report says so for every view.`);
+      view.dataset.sign = "true";
     }
     view.dataset.warning = "true";
   }
