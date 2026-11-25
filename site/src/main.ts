@@ -7,15 +7,13 @@ import { count, el } from "./ui";
 const FILES = [
   "meta", "facets", "weekly", "tools", "dfg", "tool-use-dfg", "variants", "recovery", "recovery-curves", "schema",
   "unknown-arguments", "options", "discovery", "evaluate", "collocations", "tests", "green-curves", "latency", "output",
-  "sessions", "failure-runs", "more-results", "next-entropy", "releases", "images", "published",
+  "sessions", "failure-runs", "more-results", "next-entropy", "releases", "images", "published", "errors",
 ];
 
-const FACET_LABELS: Record<string, string> = { host: "Agent host", MCP: "MCP release", PLexus: "PLexus release", environment: "Environment" };
+const FACET_LABELS: Record<string, string> = {
+  host: "Agent host", MCP: "MCP release", PLexus: "PLexus release", Pharo: "Pharo version", environment: "Environment",
+};
 
-function facetFromHash(): Facet {
-  // #facet=MCP:4.5.0 is not a plain name the viewer passes on, so the facet lives in the page only.
-  return { facet: "all", value: "all" };
-}
 
 async function main() {
   await load(FILES);
@@ -25,11 +23,11 @@ async function main() {
     lede.textContent = "No data: run `pharo-agent-analytics build` first.";
     return;
   }
-  lede.textContent = `${count(m.calls)} tool calls in ${count(m.sessions)} sessions, weeks of ${m.firstWeek} to ${m.lastWeek}.`;
+  lede.textContent = `${count(m.calls)} tool calls in ${count(m.sessions)} sessions, from ${m.first} to ${m.last}.`;
 
   const select = document.getElementById("facet") as HTMLSelectElement;
   select.append(el("option", { value: "all|all" }, `All calls (${count(m.calls)})`));
-  for (const kind of ["host", "MCP", "PLexus", "environment"]) {
+  for (const kind of ["host", "MCP", "PLexus", "Pharo", "environment"]) {
     const values = all("facets").filter((f) => f.facet === kind);
     if (!values.length) continue;
     const group = el("optgroup", { label: FACET_LABELS[kind] });
@@ -38,7 +36,7 @@ async function main() {
   }
 
   const report = document.getElementById("report")!;
-  let facet = facetFromHash();
+  let facet: Facet = { facet: "all", value: "all" };
   const render = () => {
     report.replaceChildren(
       overview(facet), tools(facet), process(facet), variants(facet), failures(facet),

@@ -13,6 +13,12 @@ import {
 
 const WIDTH = 520;
 
+/** What a threshold hides, said only when one is set. */
+function hidden(what: string): string {
+  const k = meta().minSessions;
+  return k > 1 ? ` ${what} shared by fewer than ${k} sessions are not shown.` : "";
+}
+
 function plotStyle(): Partial<Plot.PlotOptions> {
   return {
     style: { background: "transparent", color: token("--ink-2"), fontFamily: "system-ui, sans-serif", fontSize: "11px", overflow: "visible" },
@@ -27,7 +33,9 @@ function chart(options: Plot.PlotOptions): Element {
 // ---------------------------------------------------------------- overview
 
 export function overview(facet: Facet): HTMLElement {
-  const { root, body } = section("overview", "Overview", "What the participants' agents asked of the tools, week by week.");
+  const m = meta();
+  const unit = m.period === "day" ? "day" : "week";
+  const { root, body } = section("overview", "Overview", `What agents asked of the tools, ${unit} by ${unit}.`);
   const weekly = of("weekly", facet).sort((a, b) => a.week.localeCompare(b.week));
   const tools = of("tools", facet);
   const sessions = of("sessions", facet);
@@ -46,7 +54,7 @@ export function overview(facet: Facet): HTMLElement {
   );
   body.append(tiles);
 
-  const volume = card("Calls per week", "Spans keep the week they started in, never a day or an hour.");
+  const volume = card(`Calls per ${unit}`, m.timePrecise ? "By the time each call started." : "A filter kept only the week each span started in.");
   volume.chart.append(
     weekly.length
       ? chart({
@@ -54,14 +62,14 @@ export function overview(facet: Facet): HTMLElement {
           x: { type: "band", label: null, tickFormat: (d: string) => d.slice(5) },
           y: { grid: true, label: "calls" },
           marks: [
-            Plot.barY(weekly, { x: "week", y: "calls", fill: token("--series-1"), rx2: 4, inset: 1, tip: true, title: (w: Row) => `Week of ${w.week}\n${count(w.calls)} calls in ${count(w.sessions)} sessions` }),
+            Plot.barY(weekly, { x: "week", y: "calls", fill: token("--series-1"), rx2: 4, inset: 1, tip: true, title: (w: Row) => `${unit === "day" ? "" : "Week of "}${w.week}\n${count(w.calls)} calls in ${count(w.sessions)} sessions` }),
             Plot.ruleY([0], { stroke: token("--axis") }),
           ],
         })
       : empty(),
-    tableView(weekly, [{ key: "week", label: "Week" }, { key: "calls", label: "Calls", numeric: true }, { key: "sessions", label: "Sessions", numeric: true }, { key: "failed", label: "Failed calls", numeric: true }]),
+    tableView(weekly, [{ key: "week", label: unit === "day" ? "Day" : "Week" }, { key: "calls", label: "Calls", numeric: true }, { key: "sessions", label: "Sessions", numeric: true }, { key: "failed", label: "Failed calls", numeric: true }]),
   );
-  const failure = card("Sessions that met a failure", "Share of the week's sessions with at least one failed call, with its 95 % interval.");
+  const failure = card("Sessions that met a failure", `Share of the ${unit}'s sessions with at least one failed call, with its 95 % interval.`);
   const rates = weekly.map((w) => ({ ...w, rate: w.sessions_with_failure / w.sessions, ...wilson(w.sessions_with_failure, w.sessions) }));
   failure.chart.append(
     rates.length
@@ -71,7 +79,7 @@ export function overview(facet: Facet): HTMLElement {
           y: { grid: true, label: "sessions", domain: [0, 1], tickFormat: "%" },
           marks: [
             Plot.ruleX(rates, { x: "week", y1: "low", y2: "high", stroke: token("--series-1"), strokeOpacity: 0.35, strokeWidth: 6 }),
-            Plot.dot(rates, { x: "week", y: "rate", fill: token("--series-1"), r: 4, tip: true, title: (w: Row) => `Week of ${w.week}\n${count(w.sessions_with_failure)} of ${count(w.sessions)} sessions (${percent(w.rate)})` }),
+            Plot.dot(rates, { x: "week", y: "rate", fill: token("--series-1"), r: 4, tip: true, title: (w: Row) => `${w.week}\n${count(w.sessions_with_failure)} of ${count(w.sessions)} sessions (${percent(w.rate)})` }),
             Plot.ruleY([0], { stroke: token("--axis") }),
           ],
         })
@@ -169,7 +177,20 @@ export function tools(facet: Facet): HTMLElement {
     { key: "budget_exceeded", label: "Cut to fit", numeric: true, format: count },
     { key: "unknown_arguments", label: "Unknown args", numeric: true, format: count },
   ]));
-  body.append(funnel.root, how.root, inventory.root);
+  const errors = of("errors", facet).sort((a, b) => b.calls - a.calls);
+  const words = card("Failures in their own words", errors.some((e) => e.code || e.message || e.exception_type)
+    ? "The error code, the exception's class and the message the client was answered with, numbers and quoted parts blanked so that one message is one row."
+    : "These spans carry no error code, class or message: whatever exported them left them out.", true);
+  words.chart.append(errors.length ? table(errors, [
+    { key: "tool", label: "Tool" },
+    { key: "error_kind", label: "Kind", format: (v) => ERROR_LABELS[errorKind(v)] },
+    { key: "code", label: "Code" },
+    { key: "exception_type", label: "Exception" },
+    { key: "message", label: "Message" },
+    { key: "calls", label: "Calls", numeric: true, format: count },
+    { key: "sessions", label: "Sessions", numeric: true, format: count },
+  ]) : empty("No call failed."));
+  body.append(funnel.root, how.root, inventory.root, words.root);
   return root;
 }
 
@@ -216,7 +237,7 @@ export function variants(facet: Facet): HTMLElement {
   const rows = of("variants", facet).sort((a, b) => b.sessions - a.sessions);
   const total = d3.sum(rows, (r) => r.sessions);
   const max = d3.max(rows, (r) => r.sessions) ?? 1;
-  const list = card("Most common sessions", `Sequences shared by fewer than ${meta().minSessions} sessions are counted together, never shown.`, true);
+  const list = card("Most common sessions", `The sequences most sessions share.${meta().minSessions > 1 ? ` Those shared by fewer than ${meta().minSessions} sessions are counted together, never shown.` : ""}`, true);
   let covered = 0;
   list.chart.append(
     rows.length
@@ -318,7 +339,7 @@ export function failures(facet: Facet): HTMLElement {
             Plot.ruleY([0], { stroke: token("--axis") }),
           ],
         })
-      : empty(`No run of failures shared by ${meta().minSessions} sessions.`),
+      : empty("No tool failed twice in a row."),
     legend([["then the tool worked", token("--series-1")], ["then another tool", token("--series-2")], ["then the session ended", token("--series-3")]]),
     tableView(runs, [{ key: "tool", label: "Tool" }, { key: "length", label: "In a row", numeric: true }, { key: "ending", label: "Then" }, { key: "runs", label: "Runs", numeric: true }, { key: "sessions", label: "Sessions", numeric: true }]),
   );
@@ -390,7 +411,7 @@ export function argumentsSection(facet: Facet): HTMLElement {
   const schema = of("schema", facet);
   const cells = Array.from(d3.rollup(schema, (v) => ({ calls: d3.sum(v, (r) => r.calls), sessions: d3.max(v, (r) => r.sessions), keywords: [...new Set(v.map((r) => r.keyword))].join(", ") }), (r) => r.tool, (r) => r.path),
     ([tool, paths]) => Array.from(paths, ([path, value]) => ({ tool, path, ...value }))).flat();
-  const heat = card("Where the schema breaks", `Calls refused for their arguments, by tool and by the place in its input they broke; the rule broken shows on hover. Cells shared by fewer than ${meta().minSessions} sessions are left out.`, true);
+  const heat = card("Where the schema breaks", `Calls refused for their arguments, by tool and by the place in its input they broke; the rule broken shows on hover. ${hidden("Cells")}`, true);
   const toolsOrder = d3.groupSort(cells, (v) => -d3.sum(v, (d) => d.calls), (d) => d.tool);
   const pathsOrder = d3.groupSort(cells, (v) => -d3.sum(v, (d) => d.calls), (d) => d.path);
   heat.chart.append(
@@ -405,7 +426,7 @@ export function argumentsSection(facet: Facet): HTMLElement {
             Plot.text(cells, { x: "path", y: "tool", text: (d: Row) => count(d.calls), fill: token("--seq-ink") }),
           ],
         })
-      : empty(`No refusal shared by ${meta().minSessions} sessions.`),
+      : empty("No call broke a tool's schema."),
   );
   const unknown = of("unknown-arguments", facet).sort((a, b) => b.calls - a.calls);
   const words = card("Names agents expect", "Argument names calls gave that the tool does not take: a name many agents reach for is a candidate variant to accept, while the description keeps the canonical one.");
@@ -413,7 +434,7 @@ export function argumentsSection(facet: Facet): HTMLElement {
     { key: "tool", label: "Tool" }, { key: "name", label: "Name given" },
     { key: "calls", label: "Calls", numeric: true, format: count }, { key: "sessions", label: "Sessions", numeric: true, format: count },
     { key: "failed", label: "Failed", numeric: true, format: count },
-  ]) : empty(`No unknown name shared by ${meta().minSessions} sessions.`));
+  ]) : empty("No call gave a name its tool lacks."));
   const options = of("options", facet).sort((a, b) => b.calls - a.calls);
   const used = card("Options in use", "The options calls chose: a property given, a value of an enumeration, or a list for several targets. An option missing here is one nobody uses.");
   used.chart.append(options.length ? table(options, [
@@ -605,7 +626,7 @@ export function releases(): HTMLElement {
               Plot.dot(shown, { fy: "tool", y: "release", x: "standardised_rate", stroke: token("--ink"), r: 6, strokeWidth: 1.5 }),
             ],
           })
-        : empty(`No tool has ${meta().minSessions} sessions in two ${component} releases yet.`),
+        : empty(`No tool was called under two ${component} releases yet.`),
     );
   };
   const control = segmented([["MCP", "MCP"], ["PLexus", "PLexus"]], "MCP", draw);
@@ -630,12 +651,14 @@ export function method(): HTMLElement {
   const { root, body } = section("method", "Method", "What these numbers are, and what they cannot say.");
   body.append(
     el("div", { class: "method card wide" },
-      el("p", {}, `Built ${m.generated.slice(0, 10)} from ${count(m.spans)} spans: ${count(m.calls)} calls in ${count(m.sessions)} sessions, weeks of ${m.firstWeek} to ${m.lastWeek}.`),
+      el("p", {}, `Built ${m.generated.slice(0, 10)} from ${count(m.spans)} spans of MCP and PLexus: ${count(m.calls)} calls in ${count(m.sessions)} sessions, from ${m.first} to ${m.last}.`),
       el("h3", {}, "Calls and sessions"),
       el("ul", {},
         el("li", {}, "A call is the spans one tool call left: PLexus's span and the image's, joined within their trace. A call an image's tool_call dispatched is counted as dispatched, not as a call the agent made."),
         el("li", {}, "A session ends after 30 minutes without a call. Subagents of one agent share its session, so their calls interleave in it."),
-        el("li", {}, "Calls are ordered within their session by when the participant's machine saw them start. Spans keep only their week, so nothing is ordered across sessions; every sequence in this report lives inside one session."),
+        el("li", {}, m.timePrecise
+          ? "Calls are ordered by the time they started, and the time between two calls is real."
+          : "A filter kept only the week of each span, and each call's offset in its session: calls are ordered within their session only, and every sequence here lives inside one session."),
         el("li", {}, "A call failed when its span is an error, or names an error type, an MCP error kind or a PLexus refusal: a refused argument is not an error on the span by OpenTelemetry's conventions, but it is a failed call here.")),
       el("h3", {}, "Rates"),
       el("ul", {},
@@ -644,10 +667,17 @@ export function method(): HTMLElement {
         el("li", {}, "Release comparisons are also given with every release weighted to the same mix of agent hosts (direct standardisation): hosts fail differently, and their mix moves between releases.")),
       el("h3", {}, "What is left out"),
       el("ul", {},
-        el("li", {}, `A host or release with fewer than ${m.minSessions} sessions has no facet of its own. A sequence, a pair, a schema place, an argument name or an option shared by fewer than ${m.minSessions} sessions is not shown; rare sequences are counted together.`),
-        el("li", {}, "The spans hold no argument value, no answer, no prompt and no model: the report says where agents struggle, never why. The evaluations say why.")),
+        el("li", {}, m.minSessions > 1
+          ? `A host or release with fewer than ${m.minSessions} sessions has no view of its own. A sequence, a pair, a schema place, an argument name, an option or an error message shared by fewer than ${m.minSessions} sessions is not shown; rare sequences are counted together.`
+          : "Nothing: every session counts, as for spans read by whoever made them. A report read by others should be built with a threshold (--min-sessions)."),
+        el("li", {}, m.filtered
+          ? "A filter chose what these spans keep before they were exported; what it dropped, this report cannot show."
+          : "These spans are as the tools sent them."),
+        el("li", {}, m.content
+          ? "Some spans carry the calls' arguments and answers (content capture was on); the report counts them, but shows none."
+          : "The spans hold no argument value or answer (content capture was off), no prompt and no model: the report says where agents struggle, never why.")),
       el("h3", {}, "The event log"),
-      el("p", {}, "The same calls are written as an OCEL 2.0 object-centric event log (`pharo-agent-analytics ocel`): events are calls, objects the session, the tool as used in a session, the input places a call broke, the tool, the agent host and the releases. Times in it are the week plus the offset in the session: true within a session only."),
+      el("p", {}, "The same calls are written as an OCEL 2.0 object-centric event log (`pharo-agent-analytics ocel`): events are calls, objects the session, the tool as used in a session, the input places a call broke, the tool, the agent host and the releases."),
     ),
   );
   return root;

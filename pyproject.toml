@@ -5,6 +5,7 @@ description = "The Pharo agent tools' field telemetry as an object-centric event
 authors = [
     { name = "Gabriel Darbord", email = "78592838+Gabriel-Darbord@users.noreply.github.com" }
 ]
+license = "Apache-2.0"
 requires-python = ">=3.13"
 dependencies = [
     "duckdb>=2.0.1",

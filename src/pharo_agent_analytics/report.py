@@ -1,9 +1,11 @@
-"""The report's data: each analysis as a small JSON file, aggregated and thresholded.
+"""The report's data: each analysis as a small JSON file of aggregates.
 
-Nothing the report reads describes one session: a facet (an agent host, a
-release) with fewer sessions than the threshold is left out, and so is any
-row that tells a sequence or a word fewer sessions than that share; variants
-below it are counted together as "other".
+With a threshold of k sessions, nothing the report reads describes fewer
+than k sessions: a facet (an agent host, a release) with fewer is left out,
+and so is any row that tells a sequence or a word fewer share; variants below
+it are counted together as "other". The default, 1, shows everything, for
+whoever reads their own spans; a report shared beyond the people whose spans
+it reads should set one.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ THRESHOLDED = {
     "a_options",
     "a_tool_use_dfg",
     "a_failure_runs",
+    "a_errors",
 }
 
 #: The report's files, from the analyses' tables.
@@ -52,6 +55,7 @@ TABLES = {
     "more-results": "a_more_results",
     "compile-to-green": "a_compile_to_green",
     "next-entropy": "a_next_entropy",
+    "errors": "a_errors",
 }
 
 
@@ -140,17 +144,20 @@ def incidence_curves(connection: duckdb.DuckDBPyConnection, table_name: str, gro
 
 
 def published_tools(catalog: Path) -> dict[str, Any]:
-    """The tools each component publishes, from a study's catalog."""
+    """The tools that exist, for those nobody called: a catalog as pharo-agent-telemetry writes it
+    (its `MCP tools` and `PLexus tools` sets), or a JSON list of tool names."""
     data = json.loads(catalog.read_text())
+    if isinstance(data, list):
+        return {"columns": ["component", "tool"], "rows": [[None, tool] for tool in data]}
     sets = data.get("sets", {})
     out = []
     for component in ("MCP", "PLexus"):
         for tool in sets.get(f"{component} tools", []):
             out.append([component, tool])
-    return {"columns": ["component", "tool"], "rows": out, "releases": data.get("releases", {})}
+    return {"columns": ["component", "tool"], "rows": out}
 
 
-def write(connection: duckdb.DuckDBPyConnection, out: Path, min_sessions: int = 3, catalog: Path | None = None) -> dict[str, Any]:
+def write(connection: duckdb.DuckDBPyConnection, out: Path, min_sessions: int = 1, catalog: Path | None = None) -> dict[str, Any]:
     out.mkdir(parents=True, exist_ok=True)
     kept_facets(connection, min_sessions)
     files = {}
@@ -164,16 +171,21 @@ def write(connection: duckdb.DuckDBPyConnection, out: Path, min_sessions: int = 
     if catalog:
         files["published"] = published_tools(catalog)
     totals = connection.execute(
-        "SELECT count(*), count(DISTINCT session_id), min(week), max(week), count(*) FILTER (WHERE failed) FROM steps"
+        "SELECT count(*), count(DISTINCT session_id), min(start_time), max(start_time), count(*) FILTER (WHERE failed) FROM steps"
     ).fetchone()
     meta = {
         "generated": datetime.now(UTC).isoformat(timespec="seconds"),
         "calls": totals[0],
         "sessions": totals[1],
-        "firstWeek": plain(totals[2]),
-        "lastWeek": plain(totals[3]),
+        "first": plain(totals[2]),
+        "last": plain(totals[3]),
         "failed": totals[4],
         "minSessions": min_sessions,
+        "period": connection.execute("SELECT unit FROM period").fetchone()[0],
+        "timePrecise": bool(connection.execute("SELECT coalesce(bool_and(time_precise), FALSE) FROM steps").fetchone()[0]),
+        "filtered": bool(connection.execute("SELECT count(*) FILTER (WHERE filter_version IS NOT NULL) > 0 FROM spans").fetchone()[0]),
+        "content": bool(connection.execute(
+            "SELECT count(*) > 0 FROM spans WHERE json_exists(attributes, '$.\"gen_ai.tool.call.arguments\"')").fetchone()[0]),
         "spans": connection.execute("SELECT count(*) FROM spans").fetchone()[0],
     }
     files["meta"] = meta

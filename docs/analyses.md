@@ -1,14 +1,14 @@
 # The analyses
 
 Each analysis is a table in `sql/analyses.sql`, computed once per facet: all
-calls, and the calls of each agent host, MCP release, PLexus release and
-environment. Comparing hosts or releases is choosing a facet.
+calls, and the calls of each agent host, MCP release, PLexus release, Pharo
+version and environment. Comparing hosts or releases is choosing a facet.
 
-The spans hold no argument value, answer, prompt or model. They say where
-agents struggle with the tools and how they get out of it, never why: the
-evaluations say why, on runs whose transcripts are kept. A number here points
-at what to look at; it decides nothing, and each comes with the number that
-would show it being gamed.
+The spans hold no prompt or model, and argument values and answers only when
+content capture is on. They say where agents struggle with the tools and how
+they get out of it, rarely why: runs whose transcripts are kept say why. A
+number here points at what to look at; it decides nothing, and each comes
+with the number that would show it being gamed.
 
 ## Units and rates
 
@@ -22,9 +22,11 @@ would show it being gamed.
   server's span; it is a failed call here.
 - **A session** ends after 30 minutes without a call. Subagents share their
   agent's session, so their calls interleave in it.
-- **Order** within a session comes from when the participant's machine saw
-  each call start; spans keep only their week, so nothing is ordered across
+- **Order** comes from each call's start time. When a filter kept only the
+  week, it comes from the offset in its session the filter recorded, then
+  from PLexus's count of the session's calls, and nothing is ordered across
   sessions.
+- **Versions** of agent hosts and of Pharo are compared at major.minor.
 - Calls of one session are not independent: a rate is given per session as
   well as per call, with a Wilson interval on sessions.
 
@@ -32,9 +34,10 @@ would show it being gamed.
 
 | Analysis | Question | Shown as | Kept honest by |
 | --- | --- | --- | --- |
-| `a_weekly` | How much, and how often a session meets a failure | bars; dots with intervals | sessions, not only calls |
+| `a_weekly` | How much, and how often a session meets a failure, per day (real times over a few months at most) or week | bars; dots with intervals | sessions, not only calls |
 | `a_tools` | Which tools fail more than their use explains | funnel plot of session failure against sessions | the funnel's chance limits; raw counts in the table |
 | `a_tools` (kinds) | How each tool fails | stacked bars by error kind | the table view |
+| `a_errors` | Failures in their own words: code, exception class, the JSON-RPC message with numbers and quotes blanked | table | sessions per message |
 | `a_dfg` | Which call follows which | process map (Graphviz) | edges below a count hidden, never merged |
 | `a_tool_use_dfg` | A tool's life in a session: named by a search, called, failed, worked | process map of one tool | sessions per arc |
 | `a_variants` | What whole sessions look like | sequences with their coverage | rare ones counted together |
@@ -57,8 +60,9 @@ would show it being gamed.
 
 ## Thresholds
 
-`--min-sessions` (3) applies to every facet and to every row that tells a
-sequence or a word (variants, pairs, schema places, argument names, options,
-a tool's life, runs). Variants below it are counted together. Rows that only
-count calls of a published tool are kept, since the study publishes those
-names.
+`--min-sessions` (1 by default: everything) applies to every facet and to
+every row that tells a sequence or a word (variants, pairs, schema places,
+argument names, options, a tool's life, runs, error messages). Variants below
+it are counted together. Rows that count calls of a tool are kept whatever
+the threshold. Set it for a report read beyond the people whose spans it
+holds.

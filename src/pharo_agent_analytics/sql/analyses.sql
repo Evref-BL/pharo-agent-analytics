@@ -17,12 +17,12 @@ CREATE OR REPLACE MACRO wilson_high(k, n) AS CASE WHEN n = 0 THEN NULL ELSE
 CREATE OR REPLACE TABLE steps AS
 SELECT
     c.*,
-    coalesce(host || coalesce(' ' || host_version, ''), 'unknown host')  AS host_label,
+    coalesce(host || coalesce(' ' || host_release, ''), 'unknown host')  AS host_label,
     lag(tool)    OVER w AS prev_tool,
     lag(failed)  OVER w AS prev_failed,
     lead(tool)   OVER w AS next_tool,
     lead(failed) OVER w AS next_failed,
-    offset_ms - lag(offset_ms) OVER w AS gap_ms,
+    order_ms - lag(order_ms) OVER w AS gap_ms,
     row_number() OVER w AS step,
     count(*) OVER (PARTITION BY session_id) AS session_steps
 FROM calls c
@@ -37,6 +37,7 @@ FROM steps s,
                      ('host', s.host_label),
                      ('MCP', s.mcp_version),
                      ('PLexus', s.plexus_version),
+                     ('Pharo', s.pharo_release),
                      ('environment', s.environment)) f(facet, facet_value)
 WHERE f.facet_value IS NOT NULL;
 
@@ -45,9 +46,16 @@ SELECT facet, facet_value, count(*) AS calls, count(DISTINCT session_id) AS sess
        min(week) AS first_week, max(week) AS last_week
 FROM faceted GROUP BY ALL;
 
--- Weekly volume and failure.
+-- Volume and failure per period: a day when the spans kept their time and
+-- span a few months at most, else a week.
+CREATE OR REPLACE TABLE period AS
+SELECT CASE WHEN bool_and(time_precise) AND max(start_time) - min(start_time) <= INTERVAL 120 DAY
+            THEN 'day' ELSE 'week' END AS unit
+FROM steps;
+
 CREATE OR REPLACE TABLE a_weekly AS
-SELECT facet, facet_value, week,
+SELECT facet, facet_value,
+       date_trunc((SELECT unit FROM period), start_time) AS week,
        count(*) AS calls,
        count(DISTINCT session_id) AS sessions,
        count(*) FILTER (WHERE failed) AS failed,
@@ -357,9 +365,11 @@ SELECT facet, facet_value, tool,
 FROM faceted WHERE duration_ms IS NOT NULL
 GROUP BY ALL;
 
--- Answer sizes, in the buckets the study keeps.
+-- Answer sizes, in powers of two of bytes (a filter may have kept only those).
 CREATE OR REPLACE TABLE a_output AS
-SELECT facet, facet_value, tool, output_bytes, count(*) AS calls,
+SELECT facet, facet_value, tool,
+       CASE WHEN output_bytes <= 0 THEN 0 ELSE CAST(pow(2, floor(log2(output_bytes))) AS BIGINT) END AS output_bytes,
+       count(*) AS calls,
        count(*) FILTER (WHERE budget_exceeded) AS cut
 FROM faceted WHERE output_bytes IS NOT NULL
 GROUP BY ALL;
@@ -368,7 +378,7 @@ GROUP BY ALL;
 CREATE OR REPLACE TABLE a_sessions AS
 SELECT facet, facet_value,
        session_steps AS calls,
-       round((max(offset_ms) - min(offset_ms)) / 60000.0, 1) AS minutes,
+       round((max(order_ms) - min(order_ms)) / 60000.0, 1) AS minutes,
        bool_or(failed) AS any_failed,
        count(DISTINCT tool) AS tools
 FROM faceted GROUP BY facet, facet_value, session_id, session_steps;
@@ -415,3 +425,18 @@ SELECT c.component, c.release, c.tool,
        count(DISTINCT c.host_label) AS hosts
 FROM cells c JOIN mix m USING (component, tool, host_label)
 GROUP BY c.component, c.release, c.tool;
+
+-- How calls failed, in their own words: the error code, the exception's
+-- class, and the JSON-RPC error's message (the one the client was answered
+-- with) with its numbers and quoted parts blanked, so that one message is one
+-- row whatever it quoted. Absent when a filter dropped them.
+CREATE OR REPLACE TABLE a_errors AS
+SELECT facet, facet_value, tool,
+       coalesce(error_kind, CASE WHEN plexus_error_code IS NOT NULL THEN 'refused by PLexus' END, 'other') AS error_kind,
+       coalesce(error_code, plexus_error_code) AS code,
+       exception_type,
+       left(regexp_replace(regexp_replace(status_message, '''[^'']*''|"[^"]*"|`[^`]*`', '…', 'g'), '[0-9]+', '#', 'g'), 240) AS message,
+       count(*) AS calls, count(DISTINCT session_id) AS sessions
+FROM faceted
+WHERE failed
+GROUP BY ALL;

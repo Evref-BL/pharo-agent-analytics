@@ -21,7 +21,7 @@ class Stub(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers.get("content-length", 0))) or b"{}")
         Stub.requests.append((self.path, body, self.headers.get("Authorization")))
-        if self.path.endswith("/_pit?keep_alive=2m"):
+        if "/_pit?" in self.path:
             return self.answer({"id": "pit-1"})
         start = body.get("search_after", [-1])[0] + 1
         page = Stub.hits[start:start + body["size"]]

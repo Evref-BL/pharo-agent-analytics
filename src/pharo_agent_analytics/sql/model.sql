@@ -7,9 +7,15 @@
 -- image's tool_call dispatched is an image span under another image span: it
 -- is a call of its own, marked dispatched.
 --
--- Trace ids are keyed hashes made on each participant's machine, and an image
--- may repeat its ids from one start to the next, so spans are only ever
--- joined within one trace, one session and one week.
+-- An image may repeat its ids from one start to the next, and a filter may
+-- replace them by hashes made on each machine, so spans are only ever joined
+-- within one trace, one session and one week.
+--
+-- Order within a session comes from the spans' start times when the exporter
+-- kept them; when a filter kept only the week, from the offset in its session
+-- the filter recorded (pharo_agent_telemetry.session.offset_ms), then from
+-- PLexus's count of the session's calls. `order_ms` is either, in
+-- milliseconds, so the time between two calls is a difference of it.
 
 CREATE OR REPLACE VIEW plexus_server AS
 SELECT * FROM spans
@@ -39,19 +45,26 @@ SELECT
     px.doc_id                                          AS call_id,
     px.session_id,
     px.week,
-    coalesce(px.offset_ms, im.offset_ms)               AS offset_ms,
+    px.start_time,
+    px.time_precise,
+    coalesce(px.offset_ms, im.offset_ms,
+             CASE WHEN px.time_precise THEN epoch_ms(px.start_time) END) AS order_ms,
     px.call_index,
     'plexus'                                           AS entry,
     FALSE                                              AS dispatched,
     coalesce(im.tool, px.tool)                         AS tool,
     coalesce(im.tool_origin, CASE WHEN NOT coalesce(px.forwarded, FALSE) THEN 'plexus' END) AS tool_origin,
     CASE WHEN im.doc_id IS NOT NULL THEN im.status ELSE px.status END AS status,
+    coalesce(im.status_message, px.status_message)     AS status_message,
     px.status                                          AS plexus_status,
     im.status                                          AS image_status,
     coalesce(im.error_type, px.error_type)             AS error_type,
     im.error_kind,
     im.error_code,
     px.plexus_error_code,
+    px.request_id,
+    pc.server_address,
+    pc.server_port,
     coalesce(px.forwarded, FALSE)                      AS forwarded,
     im.doc_id IS NOT NULL                              AS reached_image,
     px.duration_ms,
@@ -97,11 +110,12 @@ UNION ALL
 
 -- Straight to an image, or dispatched by its tool_call: image spans no PLexus server span of their trace holds.
 SELECT
-    im.doc_id, im.session_id, im.week, im.offset_ms, NULL,
+    im.doc_id, im.session_id, im.week, im.start_time, im.time_precise,
+    coalesce(im.offset_ms, CASE WHEN im.time_precise THEN epoch_ms(im.start_time) END), NULL,
     CASE WHEN im.dispatched THEN 'dispatch' ELSE 'image' END,
     im.dispatched,
-    im.tool, im.tool_origin, im.status, NULL, im.status,
-    im.error_type, im.error_kind, im.error_code, NULL,
+    im.tool, im.tool_origin, im.status, im.status_message, NULL, im.status,
+    im.error_type, im.error_kind, im.error_code, NULL, im.request_id, NULL, NULL,
     TRUE, TRUE,
     im.duration_ms, im.duration_ms,
     im.mcp_client, im.mcp_client_version,
@@ -119,18 +133,19 @@ WHERE im.dispatched OR NOT EXISTS (
       AND px.session_id IS NOT DISTINCT FROM im.session_id
 );
 
--- Ordered within the session, by when the participant's agent saw them start,
--- then PLexus's count.
--- A call that names no session (none the study keeps) is a session of its own.
+-- Ordered within the session. A call that names no session is a session of its own.
+-- Versions are also given as major.minor, the grain hosts and Pharo are compared at.
 CREATE OR REPLACE TABLE calls AS
 SELECT *,
+       nullif(regexp_extract(host_version, '(\d+\.\d+)', 1), '')  AS host_release,
+       nullif(regexp_extract(pharo_version, '(\d+\.\d+)', 1), '') AS pharo_release,
        row_number() OVER session_order                    AS seq,
        count(*) OVER (PARTITION BY session_id)            AS session_calls,
        -- A refused argument (-32602) is not an error on a server span, by the conventions, but it is a failed call.
        (status = 'error' OR error_type IS NOT NULL OR error_kind IS NOT NULL
         OR plexus_error_code IS NOT NULL)                 AS failed
 FROM (SELECT * REPLACE (coalesce(session_id, 'call ' || call_id) AS session_id) FROM calls_unordered)
-WINDOW session_order AS (PARTITION BY session_id ORDER BY offset_ms NULLS LAST, call_index NULLS LAST, call_id);
+WINDOW session_order AS (PARTITION BY session_id ORDER BY order_ms NULLS LAST, call_index NULLS LAST, call_id);
 
 -- One row per session.
 CREATE OR REPLACE TABLE sessions AS
@@ -139,12 +154,15 @@ SELECT
     min(week)                                             AS week,
     count(*)                                              AS calls,
     count(*) FILTER (WHERE failed)                        AS failed_calls,
-    (max(offset_ms) - min(offset_ms))                     AS span_ms,
+    (max(order_ms) - min(order_ms))                       AS span_ms,
+    bool_and(time_precise)                                AS time_precise,
     arg_max(host, host IS NOT NULL)                       AS host,
     arg_max(host_version, host_version IS NOT NULL)       AS host_version,
     arg_max(mcp_version, mcp_version IS NOT NULL)         AS mcp_version,
     arg_max(plexus_version, plexus_version IS NOT NULL)   AS plexus_version,
     arg_max(pharo_version, pharo_version IS NOT NULL)     AS pharo_version,
+    arg_max(pharo_release, pharo_release IS NOT NULL)     AS pharo_release,
+    arg_max(host_release, host_release IS NOT NULL)       AS host_release,
     arg_max(os_type, os_type IS NOT NULL)                 AS os_type,
     arg_max(environment, environment IS NOT NULL)         AS environment,
     bool_or(entry = 'plexus')                             AS through_plexus

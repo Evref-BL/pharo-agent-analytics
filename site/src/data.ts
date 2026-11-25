@@ -7,11 +7,15 @@ export interface Meta {
   generated: string;
   calls: number;
   sessions: number;
-  firstWeek: string;
-  lastWeek: string;
+  first: string;
+  last: string;
   failed: number;
   minSessions: number;
   spans: number;
+  period: "day" | "week";
+  timePrecise: boolean;
+  filtered: boolean;
+  content: boolean;
 }
 
 export interface Facet { facet: string; value: string }
@@ -25,13 +29,15 @@ function objects(table: Table): Row[] {
 export async function load(names: string[]): Promise<void> {
   await Promise.all(
     names.map(async (name) => {
-      const response = await fetch(`./data/${name}.json`);
-      if (!response.ok) {
-        cache.set(name, []);
-        return;
+      // A file a build did not write (no catalog, say) is no rows: a server may answer it with a page instead of a 404.
+      let json: any = null;
+      try {
+        const response = await fetch(`./data/${name}.json`);
+        if (response.ok) json = await response.json();
+      } catch {
+        json = null;
       }
-      const json = await response.json();
-      cache.set(name, Array.isArray(json.rows) ? objects(json) : [json]);
+      cache.set(name, json == null ? [] : Array.isArray(json.rows) ? objects(json) : [json]);
     }),
   );
 }

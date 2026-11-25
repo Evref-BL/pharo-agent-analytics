@@ -13,7 +13,11 @@ CREATE OR REPLACE MACRO attr_list(doc, key) AS
 INSERT OR IGNORE INTO spans
 SELECT
     doc ->> '_id',
+    CAST(doc ->> '$."@timestamp"' AS TIMESTAMP),
     date_trunc('week', CAST(doc ->> '$."@timestamp"' AS TIMESTAMP)),
+    -- A filter that keeps only the week says so, or leaves every span on a Monday at midnight.
+    res(doc, 'pharo_agent_telemetry.filter.version') IS NULL
+        AND CAST(doc ->> '$."@timestamp"' AS TIMESTAMP) <> date_trunc('week', CAST(doc ->> '$."@timestamp"' AS TIMESTAMP)),
     CAST(doc ->> 'duration_ms' AS DOUBLE),
     doc ->> 'trace_id',
     doc ->> 'span_id',
@@ -21,6 +25,7 @@ SELECT
     doc ->> 'name',
     doc ->> 'kind',
     doc ->> 'status',
+    doc ->> 'status_message',
     doc -> 'scope' ->> 'name',
     doc -> 'scope' ->> 'version',
     res(doc, 'service.name'),
@@ -28,6 +33,7 @@ SELECT
     res(doc, 'os.type'),
     res(doc, 'process.runtime.name'),
     res(doc, 'process.runtime.version'),
+    res(doc, 'process.runtime.description'),
     res(doc, 'deployment.environment.name'),
     res(doc, 'pharo_agent_evals.variant'),
     res(doc, 'pharo_agent_telemetry.filter.version'),
@@ -36,6 +42,7 @@ SELECT
     -- The span's name starts with the method too ("tools/call class_get"), when the attribute is absent.
     coalesce(attr(doc, 'mcp.method.name'),
              CASE WHEN (doc ->> 'name') LIKE '%/%' THEN split_part(doc ->> 'name', ' ', 1) END),
+    attr(doc, 'jsonrpc.request.id'),
     attr(doc, 'gen_ai.tool.name'),
     attr(doc, 'error.type'),
     attr(doc, 'plexus.client.name'),
@@ -46,6 +53,8 @@ SELECT
     attr_list(doc, 'plexus.argument.unknown_names'),
     attr(doc, 'plexus.error.code'),
     TRY_CAST(attr(doc, 'plexus.image.save') AS BOOLEAN),
+    attr(doc, 'server.address'),
+    TRY_CAST(attr(doc, 'server.port') AS BIGINT),
     attr(doc, 'mcp.protocol.version'),
     attr(doc, 'pharo.mcp.tool.origin'),
     attr(doc, 'pharo.mcp.dispatch_path'),
@@ -69,5 +78,6 @@ SELECT
     attr_list(doc, 'pharo.mcp.error.schema.keywords'),
     attr_list(doc, 'pharo.mcp.error.schema.paths'),
     attr(doc, 'pharo.mcp.exception.type'),
-    doc -> 'attributes'
+    doc -> 'attributes',
+    doc -> 'events'
 FROM (SELECT json AS doc FROM read_ndjson_objects($path));

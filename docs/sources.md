@@ -32,6 +32,11 @@ What the project builds on, read 2026-11-25. Versions are those of that day.
 - OpenTelemetry's MCP conventions: span names, `mcp.method.name`,
   `error.type`, and a refused argument not an error on the server's span.
   https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/mcp.md
+- The OpenTelemetry Collector's Elasticsearch exporter: `otel` mapping by
+  default, `traces-generic.otel-default`, span attributes under `attributes`,
+  resource ones under `resource.attributes`, duration in nanoseconds, status
+  as `status.code` and `status.message`, events as separate documents.
+  https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/elasticsearchexporter
 
 ## Agents and their tools
 

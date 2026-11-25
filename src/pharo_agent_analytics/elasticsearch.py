@@ -17,6 +17,8 @@ from typing import Any
 from .documents import hit_document
 
 PAGE = 5_000
+#: The instrumentation scopes of the Pharo tools' spans: MCP's in an image, PLexus's.
+SCOPES = ("mcp-pharo", "@evref-bl/plexus")
 
 
 class ElasticsearchError(RuntimeError):
@@ -45,9 +47,13 @@ class Elasticsearch:
             raise ElasticsearchError(f"{method} {path}: {error.code} {error.read()[:300]!r}") from None
 
     def documents(self, index: str, since: str | None = None) -> Iterator[dict[str, Any]]:
-        """Every span document of `index` (a pattern), from the week `since` (ISO date) on."""
-        pit = self.request("POST", f"{index}/_pit?keep_alive=2m")["id"]
-        query: dict[str, Any] = {"range": {"@timestamp": {"gte": since}}} if since else {"match_all": {}}
+        """Every span document of the Pharo tools in `index` (patterns, comma-separated), from `since` (ISO date) on."""
+        pit = self.request("POST", f"{index}/_pit?keep_alive=2m&ignore_unavailable=true")["id"]
+        # Only the Pharo tools' spans: an index the Collector writes holds every service's.
+        filters: list[dict[str, Any]] = [{"terms": {"scope.name": list(SCOPES)}}]
+        if since:
+            filters.append({"range": {"@timestamp": {"gte": since}}})
+        query: dict[str, Any] = {"bool": {"filter": filters}}
         after = None
         try:
             while True:

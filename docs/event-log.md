@@ -16,26 +16,27 @@ case is an error. OCEL keeps every relation, qualified.
 
 ## Time
 
-OCEL gives each event one time. A span keeps only its week and its offset in
-its session, so an event's time is its week's Monday plus that offset: true
-within a session, meaningless across sessions, where every session starts on
-the Monday. Two consequences:
+OCEL gives each event one time: the call's start. When a filter kept only
+the week of each span and its offset in its session, the time is the week's
+Monday plus that offset: true within a session, meaningless across sessions,
+where every session starts on the Monday. So:
 
-- every object whose life is mined lives inside one session; objects shared
-  across sessions carry attributes and relations, never a sequence;
-- no waiting, sojourn or synchronisation time is computed across sessions;
-  durations come from the spans themselves.
+- every object whose life is mined lives inside one session, whatever the
+  times: a tool's life across sessions interleaves work nobody did together;
+- with real times, waiting and sojourn times between a session's calls are
+  real; with weeks only, compute none across sessions, and take durations
+  from the spans themselves.
 
 ## Objects
 
 | Type | Id | Lives in | Related to events as |
 | --- | --- | --- | --- |
-| `session` | the hashed session | one session | `in` |
+| `session` | its `session.id` | one session | `in` |
 | `tool use` | session / tool: a tool as used in one session | one session | `calls`, and `names` from a search that named it |
 | `input path` | session / tool + JSON pointer | one session | `breaks` |
 | `tool` | the tool's name | everywhere | through its tool uses (`of`) |
 | `agent host` | name and major.minor | everywhere | through sessions (`runs on`) |
-| `release` | MCP or PLexus and its version | everywhere | through sessions (`served by`) |
+| `release` | MCP or PLexus and its version, or Pharo's major.minor | everywhere | through sessions (`served by`, `runs in`) |
 
 `tool use` is what event knowledge graphs call a derived entity: the pair
 (session, tool) reified, so that the directly-follows relation between a

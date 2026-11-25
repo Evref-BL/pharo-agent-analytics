@@ -1,6 +1,6 @@
 """pharo-agent-analytics: from the Pharo tools' spans to an event log and a report.
 
-    pharo-agent-analytics load FILE...          documents or a collector's OTLP archive
+    pharo-agent-analytics load FILE...          OTLP JSON (a collector's file exporter, a request) or documents
     pharo-agent-analytics fetch [--since DATE]  from Elasticsearch, with a key that may read
     pharo-agent-analytics build [--out DIR]     the analyses, as the report's data
     pharo-agent-analytics ocel --out DIR        the calls as OCEL 2.0 (SQLite and JSON)
@@ -31,10 +31,28 @@ def first_line(path: Path) -> str:
 def load(args: argparse.Namespace) -> int:
     connection = store.connect(args.database)
     for path in map(Path, args.files):
-        if '"resourceSpans"' in first_line(path):
+        line = first_line(path)
+        try:
+            first = json.loads(line)
+        except ValueError:
+            first = None
+        if first is None:
+            # One JSON value over several lines: an OTLP request, or a trace store's answer.
+            docs = list(documents.json_documents(json.loads(path.read_text())))
+            print(f"{path.name}: {store.load_documents(connection, docs)} new of {len(docs)} spans")
+        elif any(documents.requests_in(first)):
             docs, malformed = documents.archive_documents(path.open())
             new = store.load_documents(connection, docs)
             print(f"{path.name}: {new} new of {len(docs)} spans" + (f", {malformed} lines not a request" if malformed else ""))
+        elif "_source" in first or isinstance((first.get("resource") or {}).get("attributes"), dict):
+            # Elasticsearch hits, or documents the Collector's exporter wrote.
+            with path.open() as file:
+                docs = [documents.hit_document(hit if "_source" in hit else {"_id": None, "_source": hit})
+                        for hit in map(json.loads, filter(str.strip, file))]
+            for doc in docs:
+                if doc.get("_id") is None:
+                    doc["_id"] = documents.document_id({k: v for k, v in doc.items() if k != "_id"})
+            print(f"{path.name}: {store.load_documents(connection, docs)} new of {len(docs)} spans")
         else:
             print(f"{path.name}: {store.load_file(connection, path)} new spans")
     return 0
@@ -54,7 +72,7 @@ def fetch(args: argparse.Namespace) -> int:
     connection = store.connect(args.database)
     try:
         batch, total, new = [], 0, 0
-        for document in client.documents(f"{args.index}-*", args.since):
+        for document in client.documents(args.index, args.since):
             batch.append(document)
             if len(batch) == 10_000:
                 new += store.load_documents(connection, batch)
@@ -104,15 +122,19 @@ def main(argv: list[str] | None = None) -> int:
     command.set_defaults(run=load)
 
     command = commands.add_parser("fetch", help="read the spans from Elasticsearch")
-    command.add_argument("--index", default="pharo-agent-traces", help="the index prefix (default %(default)s)")
+    command.add_argument("--index", default=os.environ.get("ELASTICSEARCH_INDEX", "pharo-agent-traces-*,traces-*.otel-*"),
+                         help="the indices: pharo-agent-telemetry-import's, and the OpenTelemetry Collector "
+                              "exporter's data streams (default %(default)s)")
     command.add_argument("--since", help="the first week to read, YYYY-MM-DD (default: all)")
     command.set_defaults(run=fetch)
 
     command = commands.add_parser("build", help="compute the analyses and write the report's data")
     command.add_argument("--out", default="site/public/data")
-    command.add_argument("--min-sessions", type=int, default=3,
-                         help="sessions a facet, sequence or word needs to be reported (default %(default)s)")
-    command.add_argument("--catalog", help="a study's catalog.json, for the tools nobody called")
+    command.add_argument("--min-sessions", type=int, default=1,
+                         help="sessions a facet, sequence or word needs to be reported; set it for a report "
+                              "read beyond the people whose spans it holds (default %(default)s)")
+    command.add_argument("--catalog", help="the tools that exist, for those nobody called: a pharo-agent-telemetry "
+                                           "catalog, or a JSON list of names")
     command.set_defaults(run=build)
 
     command = commands.add_parser("ocel", help="write the calls as OCEL 2.0")
