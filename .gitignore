@@ -1,0 +1,11 @@
+# Spans, the store and everything made from them stay on this machine.
+data/
+out/
+site/public/data/
+site/dist/
+site/node_modules/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store

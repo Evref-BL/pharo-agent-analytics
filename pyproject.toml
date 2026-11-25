@@ -1,0 +1,26 @@
+[project]
+name = "pharo-agent-analytics"
+version = "0.1.0"
+description = "The Pharo agent tools' field telemetry as an object-centric event log, analyses and a visual report"
+authors = [
+    { name = "Gabriel Darbord", email = "78592838+Gabriel-Darbord@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "duckdb>=2.0.1",
+]
+
+[project.scripts]
+pharo-agent-analytics = "pharo_agent_analytics.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.21,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+check = [
+    "pm4py>=2.7.23.15",
+]
+dev = [
+    "pytest>=9.2.0",
+]

@@ -1,0 +1,182 @@
+"""The report's data: each analysis as a small JSON file, aggregated and thresholded.
+
+Nothing the report reads describes one session: a facet (an agent host, a
+release) with fewer sessions than the threshold is left out, and so is any
+row that tells a sequence or a word fewer sessions than that share; variants
+below it are counted together as "other".
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from collections import defaultdict
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+import duckdb
+
+from .store import sql
+
+#: Tables whose rows tell a sequence or a word, and so need `min_sessions` sessions.
+THRESHOLDED = {
+    "a_variants",
+    "a_collocations",
+    "a_schema",
+    "a_unknown_arguments",
+    "a_options",
+    "a_tool_use_dfg",
+    "a_failure_runs",
+}
+
+#: The report's files, from the analyses' tables.
+TABLES = {
+    "weekly": "a_weekly",
+    "tools": "a_tools",
+    "dfg": "a_dfg",
+    "tool-use-dfg": "a_tool_use_dfg",
+    "variants": "a_variants",
+    "recovery": "a_recovery",
+    "schema": "a_schema",
+    "unknown-arguments": "a_unknown_arguments",
+    "options": "a_options",
+    "discovery": "a_discovery",
+    "evaluate": "a_evaluate",
+    "collocations": "a_collocations",
+    "tests": "a_tests",
+    "latency": "a_latency",
+    "output": "a_output",
+    "sessions": "a_sessions",
+    "failure-runs": "a_failure_runs",
+    "more-results": "a_more_results",
+    "compile-to-green": "a_compile_to_green",
+    "next-entropy": "a_next_entropy",
+}
+
+
+def build(connection: duckdb.DuckDBPyConnection) -> None:
+    connection.execute(sql("analyses"))
+
+
+def rows(connection: duckdb.DuckDBPyConnection, query: str, params: list | None = None) -> dict[str, Any]:
+    result = connection.execute(query, params or [])
+    columns = [d[0] for d in result.description]
+    return {"columns": columns, "rows": [[plain(v) for v in row] for row in result.fetchall()]}
+
+
+def plain(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, float):
+        return None if math.isnan(value) else round(value, 6)
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
+
+
+def kept_facets(connection: duckdb.DuckDBPyConnection, min_sessions: int) -> None:
+    connection.execute(
+        "CREATE OR REPLACE TEMP TABLE kept AS SELECT facet, facet_value FROM facets WHERE facet = 'all' OR sessions >= ?",
+        [min_sessions],
+    )
+
+
+def table(connection: duckdb.DuckDBPyConnection, name: str, min_sessions: int) -> dict[str, Any]:
+    where = "TRUE"
+    if name in THRESHOLDED:
+        where = f"sessions >= {int(min_sessions)}"
+    query = f"SELECT t.* FROM {name} t JOIN kept USING (facet, facet_value) WHERE {where}"
+    data = rows(connection, query)
+    if name == "a_variants":
+        other = connection.execute(
+            f"""SELECT facet, facet_value, 'other variants' AS variant, NULL AS length,
+                       sum(sessions) AS sessions, sum(sessions_failed) AS sessions_failed
+                FROM {name} JOIN kept USING (facet, facet_value)
+                WHERE sessions < ? GROUP BY ALL""",
+            [min_sessions],
+        ).fetchall()
+        data["rows"].extend([[plain(v) for v in row] for row in other])
+    return data
+
+
+def cumulative_incidence(observations: list[tuple[int, bool, int]]) -> list[tuple[int, float, float, int]]:
+    """Aalen-Johansen, with two competing outcomes: the tool worked, or the session ended first.
+
+    Each observation is (calls, worked, count). Answers, at each number of
+    calls, the share of failures whose tool had worked by then, and the share
+    whose session had ended without it; counting the ends as censored would
+    overstate recovery.
+    """
+    at_risk = sum(n for _, _, n in observations)
+    still, worked, ended = 1.0, 0.0, 0.0
+    points = [(0, 0.0, 0.0, at_risk)]
+    for time in sorted({t for t, _, _ in observations}):
+        recovered = sum(n for t, r, n in observations if t == time and r)
+        gave_up = sum(n for t, r, n in observations if t == time and not r)
+        if at_risk:
+            worked += still * recovered / at_risk
+            ended += still * gave_up / at_risk
+            still *= 1 - (recovered + gave_up) / at_risk
+        at_risk -= recovered + gave_up
+        points.append((time, round(worked, 6), round(ended, 6), at_risk))
+    return points
+
+
+def incidence_curves(connection: duckdb.DuckDBPyConnection, table_name: str, group: str) -> dict[str, Any]:
+    groups: dict[tuple, list] = defaultdict(list)
+    query = f"SELECT facet, facet_value, {group}, calls, {'recovered' if table_name == 'a_recovery_times' else 'reached'}, " \
+            f"{'failures' if table_name == 'a_recovery_times' else 'sessions'} FROM {table_name} JOIN kept USING (facet, facet_value)"
+    for facet, value, kind, calls, reached, count in connection.execute(query).fetchall():
+        groups[(facet, value, kind)].append((calls, reached, count))
+        if kind != "all":
+            groups[(facet, value, "all")].append((calls, reached, count))
+    rows_out = [
+        [facet, value, kind, time, worked, ended, at_risk]
+        for (facet, value, kind), observations in groups.items()
+        for time, worked, ended, at_risk in cumulative_incidence(observations)
+    ]
+    return {"columns": ["facet", "facet_value", "group", "calls", "reached", "ended", "at_risk"], "rows": rows_out}
+
+
+def published_tools(catalog: Path) -> dict[str, Any]:
+    """The tools each component publishes, from a study's catalog."""
+    data = json.loads(catalog.read_text())
+    sets = data.get("sets", {})
+    out = []
+    for component in ("MCP", "PLexus"):
+        for tool in sets.get(f"{component} tools", []):
+            out.append([component, tool])
+    return {"columns": ["component", "tool"], "rows": out, "releases": data.get("releases", {})}
+
+
+def write(connection: duckdb.DuckDBPyConnection, out: Path, min_sessions: int = 3, catalog: Path | None = None) -> dict[str, Any]:
+    out.mkdir(parents=True, exist_ok=True)
+    kept_facets(connection, min_sessions)
+    files = {}
+    for file, name in TABLES.items():
+        files[file] = table(connection, name, min_sessions)
+    files["recovery-curves"] = incidence_curves(connection, "a_recovery_times", "error_kind")
+    files["green-curves"] = incidence_curves(connection, "a_compile_to_green", "'all'")
+    files["releases"] = rows(connection, "SELECT * FROM a_releases WHERE sessions >= ? ORDER BY component, tool, release", [min_sessions])
+    files["facets"] = rows(connection, "SELECT f.* FROM facets f JOIN kept USING (facet, facet_value) ORDER BY facet, calls DESC")
+    files["images"] = rows(connection, "SELECT * FROM a_images WHERE sessions >= ? ORDER BY spans DESC", [min_sessions])
+    if catalog:
+        files["published"] = published_tools(catalog)
+    totals = connection.execute(
+        "SELECT count(*), count(DISTINCT session_id), min(week), max(week), count(*) FILTER (WHERE failed) FROM steps"
+    ).fetchone()
+    meta = {
+        "generated": datetime.now(UTC).isoformat(timespec="seconds"),
+        "calls": totals[0],
+        "sessions": totals[1],
+        "firstWeek": plain(totals[2]),
+        "lastWeek": plain(totals[3]),
+        "failed": totals[4],
+        "minSessions": min_sessions,
+        "spans": connection.execute("SELECT count(*) FROM spans").fetchone()[0],
+    }
+    files["meta"] = meta
+    for file, data in files.items():
+        (out / f"{file}.json").write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
+    return meta
