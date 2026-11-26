@@ -165,17 +165,18 @@ def incidence_curves(connection: duckdb.DuckDBPyConnection, table_name: str, gro
 
 
 def published_tools(catalog: Path) -> dict[str, Any]:
-    """The tools that exist, for those nobody called: a catalog as pharo-agent-telemetry writes it
-    (its `MCP tools` and `PLexus tools` sets), or a JSON list of tool names."""
+    """The tools that exist, for those nobody called: a JSON list of tool names, or a catalog as
+    pharo-agent-telemetry writes it or serves it signed, whose sets named `<project> tools` hold
+    the tools of each project it read."""
     data = json.loads(catalog.read_text())
     if isinstance(data, list):
         return {"columns": ["component", "tool"], "rows": [[None, tool] for tool in data]}
-    sets = data.get("sets", {})
-    out = []
-    for component in ("MCP", "PLexus"):
-        for tool in sets.get(f"{component} tools", []):
-            out.append([component, tool])
-    return {"columns": ["component", "tool"], "rows": out}
+    if isinstance(data.get("payload"), str):
+        data = json.loads(data["payload"])
+    rows = [[name.removesuffix(" tools"), tool]
+            for name, tools in sorted(data.get("sets", {}).items()) if name.endswith(" tools")
+            for tool in tools]
+    return {"columns": ["component", "tool"], "rows": rows}
 
 
 def records(dicts: list[dict], facet: str, value: str, columns: list[str] | None = None) -> dict[str, Any]:
