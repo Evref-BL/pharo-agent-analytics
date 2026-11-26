@@ -2,7 +2,7 @@
 
 MCP and PLexus send OTLP to the endpoint their `OTEL_*` settings name (MCP's
 [observability](https://github.com/Evref-BL/MCP/blob/main/docs/user/observability.md),
-PLexus's [telemetry](https://github.com/Evref-BL/PLexus/blob/main/docs/telemetry.md)).
+PLexus's [observability](https://github.com/Evref-BL/PLexus/blob/main/docs/observability.md)).
 To keep them on your machine, run an OpenTelemetry Collector with its file
 exporter, and `load` its files:
 
