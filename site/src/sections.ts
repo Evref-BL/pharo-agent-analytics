@@ -97,10 +97,12 @@ export function tools(facet: Facet): HTMLElement {
     n, low: Math.max(0, p0 - 1.96 * Math.sqrt((p0 * (1 - p0)) / n)), high: Math.min(1, p0 + 1.96 * Math.sqrt((p0 * (1 - p0)) / n)),
   }));
   const points = rows.map((r) => ({ ...r, rate: r.sessions_failed / r.sessions, outside: r.sessions_failed / r.sessions > p0 + 1.96 * Math.sqrt((p0 * (1 - p0)) / r.sessions) }));
+  const above = points.filter((d) => d.outside);
   const funnel = card("tools", "Failure against use", "Each dot is a tool: the sessions that used it, and the share of them in which it failed. Inside the funnel, the difference from the average is what chance alone would give; a labelled dot is above it.");
   funnel.chart.append(
     chart({
-      width: WIDTH, height: 300,
+      // Room on the right for the name of a dot above the funnel, which may be the last tool.
+      width: WIDTH, height: 300, marginRight: 20 + 7 * (d3.max(above, (d: Row) => String(d.tool).length) ?? 0),
       x: { type: "log", label: "sessions using the tool →", grid: true },
       y: { label: "↑ sessions in which it failed", domain: [0, 1], tickFormat: "%", grid: true },
       marks: [
@@ -108,7 +110,7 @@ export function tools(facet: Facet): HTMLElement {
         Plot.ruleY([p0], { stroke: token("--muted") }),
         Plot.dot(points, { x: "sessions", y: "rate", r: 5, fill: (d: Row) => (d.outside ? token("--series-2") : token("--series-1")), stroke: token("--surface"), strokeWidth: 2, tip: true,
           title: (d: Row) => `${d.tool}\n${count(d.sessions_failed)} of ${count(d.sessions)} sessions failed (${percent(d.rate)})\n95 %: ${percent(d.session_failure_low)}–${percent(d.session_failure_high)}\n${count(d.failed)} of ${count(d.calls)} calls failed` }),
-        Plot.text(points.filter((d) => d.outside), { x: "sessions", y: "rate", text: "tool", dx: 8, textAnchor: "start", fill: token("--ink") }),
+        Plot.text(above, { x: "sessions", y: "rate", text: "tool", dx: 8, textAnchor: "start", fill: token("--ink") }),
       ],
     }),
     legend([["within chance", token("--series-1")], ["above the funnel", token("--series-2")]]),
