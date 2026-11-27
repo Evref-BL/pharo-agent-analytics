@@ -90,5 +90,6 @@ SELECT
     TRY_CAST(attr(doc, 'gen_ai.usage.input_tokens') AS BIGINT),
     TRY_CAST(attr(doc, 'gen_ai.usage.output_tokens') AS BIGINT),
     attr(doc, 'gen_ai.conversation.id'),
-    attr(doc, 'rpc.status_code')
+    attr(doc, 'rpc.status_code'),
+    attr(doc, 'plexus.image.telemetry')
 FROM (SELECT json AS doc FROM read_ndjson_objects($path));

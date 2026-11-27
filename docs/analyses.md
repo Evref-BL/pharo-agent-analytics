@@ -19,6 +19,12 @@ with the number that would show it being gamed.
   span it forwarded with, the image's span, joined within their trace,
   session and week. A call an image's `tool_call` dispatched is a call of its
   own, marked dispatched, and left out of the agent's sequence.
+- **A call PLexus forwarded without an image span** is still a call, from
+  PLexus's span, without what only the image records (its origin, MCP's
+  error kind, its answer's size). `no_image_span` says why, and the report's
+  method counts each: `refused by PLexus` (`plexus.error.code`), `image does
+  not record` (`plexus.image.telemetry` other than `on`), `recording failed
+  or span lost` (`on`), or `not said`, when PLexus's span does not carry it.
 - **A failed call** is one the agent did not get what it asked for: a span
   with status error, or one naming an error type, a JSON-RPC error code
   (`rpc.status_code`), an MCP error kind or a PLexus refusal. OpenTelemetry's

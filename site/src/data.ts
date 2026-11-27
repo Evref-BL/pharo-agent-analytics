@@ -23,6 +23,8 @@ export interface Meta {
   tokens: boolean;
   evaluateCode: boolean;
   customFacets: string[];
+  /** The calls PLexus forwarded that left no image span, by why; absent from reports built before it was counted. */
+  noImageSpan?: Record<string, number>;
   /** Below this many observations, a share's 95 % interval is wider than ±rough: the view warns. */
   enough: number;
   rough: number;

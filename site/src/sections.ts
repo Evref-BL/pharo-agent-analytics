@@ -629,6 +629,22 @@ export function releases(): HTMLElement {
 
 // ---------------------------------------------------------------- method
 
+/** Why a call PLexus forwarded left no image span, as each reads in a sentence. */
+const NO_IMAGE_SPAN: Record<string, string> = {
+  "refused by PLexus": "refused by PLexus before any image saw it",
+  "image does not record": "sent to an image that does not record its calls",
+  "recording failed or span lost": "sent to an image that records, whose recording failed or whose span was lost",
+  "not said": "whose PLexus span does not say why",
+};
+
+/** The calls PLexus forwarded that left no image span, by why, or nothing when every one left one. */
+function noImageSpan(reasons: Record<string, number>): HTMLElement[] {
+  const total = Object.values(reasons).reduce((sum, each) => sum + each, 0);
+  if (total === 0) return [];
+  const parts = Object.entries(reasons).map(([reason, calls]) => `${count(calls)} ${NO_IMAGE_SPAN[reason] ?? reason}`);
+  return [el("li", {}, `${count(total)} calls PLexus forwarded left no image span, so what only the image records is missing for them: ${parts.join("; ")}.`)];
+}
+
 export function method(): HTMLElement {
   const m = meta();
   const { root, body } = section("method", "Method", "What these numbers are, and what they cannot say.");
@@ -642,7 +658,8 @@ export function method(): HTMLElement {
         el("li", {}, m.timePrecise
           ? "Calls are ordered by the time they started, and the time between two calls is real."
           : "A filter kept only the week of each span, and each call's offset in its session: calls are ordered within their session only, and every sequence here lives inside one session."),
-        el("li", {}, "A call failed when its span is an error, or names an error type, an MCP error kind or a PLexus refusal: a refused argument is not an error on the span by OpenTelemetry's conventions, but it is a failed call here.")),
+        el("li", {}, "A call failed when its span is an error, or names an error type, an MCP error kind or a PLexus refusal: a refused argument is not an error on the span by OpenTelemetry's conventions, but it is a failed call here."),
+        ...noImageSpan(m.noImageSpan ?? {})),
       el("h3", {}, "Rates"),
       el("ul", {},
         el("li", {}, "Calls of one session are not independent: a rate is given per session as well as per call, and its 95 % interval (Wilson) is the session's."),

@@ -287,6 +287,9 @@ def write(connection: duckdb.DuckDBPyConnection, out: Path, min_sessions: int = 
         "content": bool(connection.execute(
             "SELECT count(*) > 0 FROM spans WHERE json_exists(attributes, '$.\"gen_ai.tool.call.arguments\"')").fetchone()[0]),
         "spans": connection.execute("SELECT count(*) FROM spans").fetchone()[0],
+        # The calls PLexus forwarded that left no image span, by why: what the image alone records is missing for them.
+        "noImageSpan": dict(connection.execute(
+            "SELECT no_image_span, count(*) FROM steps WHERE no_image_span IS NOT NULL GROUP BY ALL ORDER BY 2 DESC").fetchall()),
         # What these spans hold beyond what every export keeps: each view that needs one says so.
         "sessionTime": bool(connection.execute("SELECT count(agent_ms) > 0 FROM steps").fetchone()[0]),
         "callerContext": bool(connection.execute("SELECT count(*) FILTER (WHERE caller_span_id IS NOT NULL) > 0 FROM steps").fetchone()[0]),

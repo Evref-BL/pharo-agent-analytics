@@ -105,7 +105,8 @@ SELECT
     coalesce(im.content_result, px.content_result)     AS content_result,
     im.resource                                        AS image_resource,
     px.resource                                        AS plexus_resource,
-    im.runtime_description                             AS vm
+    im.runtime_description                             AS vm,
+    px.image_telemetry
 FROM plexus_server px
 LEFT JOIN plexus_client pc
        ON pc.trace_id = px.trace_id AND pc.parent_span_id = px.span_id
@@ -141,7 +142,7 @@ SELECT
     im.trace_id,
     CASE WHEN NOT im.dispatched THEN nullif(im.parent_span_id, '') END,
     im.content_arguments, im.content_result,
-    im.resource, NULL, im.runtime_description
+    im.resource, NULL, im.runtime_description, NULL
 FROM image_calls im
 WHERE im.dispatched
    -- Not forwarded by a PLexus client span of its trace...
@@ -188,7 +189,16 @@ SELECT *,
        -- leave a server's span unmarked for a request it refused as the caller's fault (-32602 among
        -- them), and count it on the client's; rpc.status_code says it either way.
        (status = 'error' OR error_type IS NOT NULL OR rpc_status_code IS NOT NULL
-        OR error_kind IS NOT NULL OR plexus_error_code IS NOT NULL) AS failed
+        OR error_kind IS NOT NULL OR plexus_error_code IS NOT NULL) AS failed,
+       -- Why a call PLexus forwarded left no image span: PLexus answered it before any image saw it; the
+       -- image does not record its calls; it does, and its recording failed or its span was lost; or
+       -- PLexus's span does not say. NULL for a call with an image span, or not forwarded.
+       CASE WHEN entry = 'plexus' AND forwarded AND NOT reached_image THEN
+           CASE WHEN plexus_error_code IS NOT NULL THEN 'refused by PLexus'
+                WHEN image_telemetry = 'on' THEN 'recording failed or span lost'
+                WHEN image_telemetry IS NOT NULL THEN 'image does not record'
+                ELSE 'not said' END
+       END AS no_image_span
 FROM (SELECT cu.* REPLACE (coalesce(cu.session_id, 'call ' || cu.call_id) AS session_id),
              th.model, th.provider, th.agent_name,
              -- The host's own span of the call, from its request to the answer it got.
