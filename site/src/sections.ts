@@ -84,6 +84,26 @@ export function overview(facet: Facet): HTMLElement {
 
 // ---------------------------------------------------------------- tools
 
+/**
+ * The smallest count of `n` whose binomial probability of being reached or not
+ * exceeded is at least `q`, each with chance `p`: a funnel plot's exact limit,
+ * which the normal approximation misses for the few sessions most tools have.
+ */
+function binomialQuantile(n: number, p: number, q: number): number {
+  if (p <= 0) return 0;
+  if (p >= 1) return n;
+  // In logs, so that a large n does not underflow the first terms to zero.
+  let logPmf = n * Math.log1p(-p);
+  let cdf = Math.exp(logPmf);
+  let k = 0;
+  while (cdf < q && k < n) {
+    logPmf += Math.log((n - k) / (k + 1)) + Math.log(p / (1 - p));
+    k += 1;
+    cdf += Math.exp(logPmf);
+  }
+  return k;
+}
+
 export function tools(facet: Facet): HTMLElement {
   const { root, body } = section("tools", "Tools", "Which tools are used, which fail more than their use explains, and how.");
   const rows = of("tools", facet);
@@ -93,10 +113,14 @@ export function tools(facet: Facet): HTMLElement {
   const sessions = d3.sum(rows, (r) => r.sessions);
   const p0 = d3.sum(rows, (r) => r.sessions_failed) / sessions;
   const maxN = d3.max(rows, (r) => r.sessions) ?? 1;
+  // Exact binomial limits, 95 % of what chance alone gives around the average
+  // [Spiegelhalter 2005]: a tool is above them when it failed in more sessions
+  // than the upper limit, so one failed session out of one is not, unless
+  // almost no session fails.
   const limits = d3.range(1, maxN + 1, Math.max(1, Math.floor(maxN / 80))).concat([maxN]).map((n) => ({
-    n, low: Math.max(0, p0 - 1.96 * Math.sqrt((p0 * (1 - p0)) / n)), high: Math.min(1, p0 + 1.96 * Math.sqrt((p0 * (1 - p0)) / n)),
+    n, low: binomialQuantile(n, p0, 0.025) / n, high: binomialQuantile(n, p0, 0.975) / n,
   }));
-  const points = rows.map((r) => ({ ...r, rate: r.sessions_failed / r.sessions, outside: r.sessions_failed / r.sessions > p0 + 1.96 * Math.sqrt((p0 * (1 - p0)) / r.sessions) }));
+  const points = rows.map((r) => ({ ...r, rate: r.sessions_failed / r.sessions, outside: r.sessions_failed > binomialQuantile(r.sessions, p0, 0.975) }));
   const above = points.filter((d) => d.outside);
   const funnel = card("tools", "Failure against use", "Each dot is a tool: the sessions that used it, and the share of them in which it failed. Inside the funnel, the difference from the average is what chance alone would give; a labelled dot is above it.");
   funnel.chart.append(
@@ -106,7 +130,7 @@ export function tools(facet: Facet): HTMLElement {
       x: { type: "log", label: "sessions using the tool →", grid: true },
       y: { label: "↑ sessions in which it failed", domain: [0, 1], tickFormat: "%", grid: true },
       marks: [
-        Plot.areaY(limits, { x: "n", y1: "low", y2: "high", fill: token("--grid"), fillOpacity: 0.6, curve: "monotone-x" }),
+        Plot.areaY(limits, { x: "n", y1: "low", y2: "high", fill: token("--grid"), fillOpacity: 0.6, curve: "step-after" }),
         Plot.ruleY([p0], { stroke: token("--muted") }),
         Plot.dot(points, { x: "sessions", y: "rate", r: 5, fill: (d: Row) => (d.outside ? token("--series-2") : token("--series-1")), stroke: token("--surface"), strokeWidth: 2, tip: true,
           title: (d: Row) => `${d.tool}\n${count(d.sessions_failed)} of ${count(d.sessions)} sessions failed (${percent(d.rate)})\n95 %: ${percent(d.session_failure_low)}–${percent(d.session_failure_high)}\n${count(d.failed)} of ${count(d.calls)} calls failed` }),
