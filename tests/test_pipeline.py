@@ -206,3 +206,22 @@ def test_a_filtered_export_still_makes_every_file_and_says_what_it_lacks(analyse
         assert "rows" in data
     for name in ("hours", "traces", "host", "tokens", "evaluate-words"):
         assert json.loads((tmp_path / f"{name}.json").read_text())["rows"] == []
+
+
+def test_a_forwarded_call_without_an_image_span_says_why():
+    connection = store.connect(":memory:")
+    forwarded = {"plexus.client.name": "claude-code", "plexus.call.forwarded": True}
+    docs = [
+        span("@evref-bl/plexus", "server", "evaluate", "u1", "d", 0, **forwarded, **{"plexus.image.telemetry": "no-backend"})[0],
+        span("@evref-bl/plexus", "server", "evaluate", "u2", "d", 10, **forwarded, **{"plexus.image.telemetry": "on"})[0],
+        span("@evref-bl/plexus", "server", "evaluate", "u3", "d", 20, status="error",
+             **forwarded, **{"plexus.error.code": "no-image-running"})[0],
+        span("@evref-bl/plexus", "server", "evaluate", "u4", "d", 30, **forwarded)[0],
+        *through_plexus("class_get", "u5", "d", 40),
+        span("@evref-bl/plexus", "server", "image_list", "u6", "d", 50,
+             **{"plexus.client.name": "claude-code", "plexus.call.forwarded": False})[0],
+    ]
+    store.load_documents(connection, docs)
+    store.build_model(connection)
+    assert connection.execute("SELECT list(no_image_span ORDER BY seq) FROM calls").fetchone()[0] == [
+        "image does not record", "recording failed or span lost", "refused by PLexus", "not said", None, None]

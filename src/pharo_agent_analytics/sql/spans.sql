@@ -84,7 +84,8 @@ CREATE TABLE IF NOT EXISTS spans (
     input_tokens          BIGINT,
     output_tokens         BIGINT,
     conversation_id       VARCHAR,
-    rpc_status_code       VARCHAR        -- the JSON-RPC error code a call was answered with, error or not
+    rpc_status_code       VARCHAR,       -- the JSON-RPC error code a call was answered with, error or not
+    image_telemetry       VARCHAR        -- PLexus's: whether the image it forwarded a call to records its calls
 );
 
 ALTER TABLE spans ADD COLUMN IF NOT EXISTS resource JSON;
@@ -98,3 +99,4 @@ ALTER TABLE spans ADD COLUMN IF NOT EXISTS input_tokens BIGINT;
 ALTER TABLE spans ADD COLUMN IF NOT EXISTS output_tokens BIGINT;
 ALTER TABLE spans ADD COLUMN IF NOT EXISTS conversation_id VARCHAR;
 ALTER TABLE spans ADD COLUMN IF NOT EXISTS rpc_status_code VARCHAR;
+ALTER TABLE spans ADD COLUMN IF NOT EXISTS image_telemetry VARCHAR;
