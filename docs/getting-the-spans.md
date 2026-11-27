@@ -69,9 +69,8 @@ inside one session; with real times, the time between calls is real too.
 
 `build --min-sessions k` hides what fewer than k sessions share: a host or
 release of its own, a sequence, a pair, a schema place, an argument name, an
-option, an error message. The default, 1, shows everything, for whoever reads
-their own spans; set it when others read the report. `--catalog` names the
-tools that exist, so the report lists those nobody called: a JSON list of
+option, an error message. The default, 1, shows everything. `--catalog` names
+the tools that exist, so the report lists those nobody called: a JSON list of
 names, or a pharo-agent-telemetry catalog, as a study keeps it or as its
 collector serves it, signed, whose `<project> tools` sets each hold a
 project's tools.
